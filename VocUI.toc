@@ -1,0 +1,22 @@
+## Interface: 16001
+## Title: VocUI
+## Notes: One package for the Forever client: small modules for the way one player plays. (/vui)
+## Author: vocino
+## Version: @project-version@
+## Category: Interface
+## IconTexture: Interface\Icons\INV_Misc_Gear_01
+## SavedVariables: VocUIDB
+## AddonCompartmentFunc: VocUI_CompartmentClick
+## AddonCompartmentFuncOnEnter: VocUI_CompartmentEnter
+## AddonCompartmentFuncOnLeave: VocUI_CompartmentLeave
+## X-Website: https://github.com/vocino/vocui
+## X-License: MIT
+
+core/Palette.lua
+core/Chat.lua
+core/Sounds.lua
+core/Config.lua
+core/Modules.lua
+core/Settings.lua
+core/Slash.lua
+core/Main.lua

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/TradeSkillMaster/wowlua-ls/main/editors/vscode/wowluarc.schema.json",
+  "flavors": ["forever"],
+  "globals": {
+    "read": [
+      "dofile",
+      "loadfile",
+      "os"
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+package-as: VocUI
+
+ignore:
+  - .github
+  - .luacheckrc
+  - .wowluarc.json
+  - tests
+  - AGENTS.md
