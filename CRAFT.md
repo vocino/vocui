@@ -19,10 +19,10 @@ original and built on Blizzard's own textures. Plumber is GPL and
 nothing is copied from it: emulate the approach, never the code or
 the art.
 
-The skill stays upstream. When its craft changes, this file is
-reviewed against it in the same pass. Inside this repo, this file is
-what an agent reads before UI work; the README's principle 16 points
-here.
+This file is the repo's own now. It was distilled once, at setup,
+and it evolves here from what ships in this package; nothing outside
+the repo is consulted for craft. Inside this repo, this file is what
+an agent reads before UI work; the README's principle 16 points here.
 
 ## The look
 
@@ -166,7 +166,5 @@ These never ship, no matter how modern they look elsewhere:
 
 Read it before any UI, settings, tooltip, sound, or visual-polish
 work on any module, and review against it before calling that work
-done. Where a rule here can be checked mechanically, the family's
-check scripts (in the `voc-addons` skill) are the reference
-implementation; this repo adopts the rules whether or not a local
-check runs yet.
+done. Where a rule here can be checked mechanically, a script in
+`checks/` checks it; run `bash checks/run-all.sh .` before committing.

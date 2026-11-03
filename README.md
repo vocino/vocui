@@ -137,9 +137,9 @@ The design target, stated plainly so modules can be judged against it:
     panels and font objects, a sound confirming every meaningful
     interaction, the family chat voice (one line, a fact or a next
     step, no trailing period). The paradigms live in this repo, in
-    CRAFT.md, distilled from the `voc-addons` skill; the skill stays
-    upstream, so when CRAFT.md and the skill disagree about look and
-    feel, the skill wins and CRAFT.md is updated to match.
+    CRAFT.md, and they are this repo's own: they were distilled from
+    the Voc family's craft at the start, and they evolve here, in
+    this file, from what ships in this package.
 17. **Stock first.** Default chrome is Blizzard's own, so the package
     looks native beside the game's windows. Custom visuals are spent
     only where the game's own cannot say the thing.
@@ -155,9 +155,10 @@ The design target, stated plainly so modules can be judged against it:
     in the Forever client's `## Interface:`. Every API fact is checked
     against Blizzard's own documentation and UI source for that build
     (the `forever` branch of the UI source mirror), in the order
-    FAMILY.md's Sources of truth prescribes. Wikis and memory are leads
-    to confirm, never sources. Every global the code reads is listed
-    in the lint allowlist, added only after verification.
+    `docs/api.md` prescribes, and the verdict is recorded in
+    `docs/api-ledger.md`. Wikis and memory are leads to confirm,
+    never sources. Every global the code reads is listed in the lint
+    allowlist, added only after verification.
 20. **Headless tests, always green.** Module logic lives behind
     functions that stubbed WoW APIs can drive. No release ships with a
     failing test, a lint error, or a type error.
@@ -237,10 +238,14 @@ it breaks two family rules on purpose:
   The family keeps shipping dual clients; VocUI spends all of its
   effort on the one client its player is playing.
 
-Everything else in FAMILY.md (naming, slash grammar, chat voice,
-sounds, palette, settings mechanics) applies here unchanged, carried
-by reference rather than copied, so this file can stay about what is
-different.
+Everything else the family holds (naming, slash grammar, chat voice,
+sounds, palette, settings mechanics) was brought into this repo when
+it was set up, so the repo stands on its own: CRAFT.md carries the
+look and feel, `docs/coding.md` carries the mechanics, `docs/api.md`
+and `docs/api-ledger.md` carry the API discipline, and `checks/`
+carries the enforcement. Nothing outside this repo is consulted to
+build it. The family and this package evolve separately from here;
+where they later disagree, each is right in its own house.
 
 The graduation path runs the other way: when a module proves useful
 enough to stand alone for other players, it graduates into a family
@@ -260,7 +265,10 @@ VocUI/
   core/               loader, settings store, palette, sounds, chat, slash
   modules/            one folder per module, descriptor first
   tests/              headless tests for core and modules
-  README.md           this file
+  README.md           this file, the constitution
+  CRAFT.md            the style paradigms every module follows
+  docs/               coding.md, api.md, api-ledger.md, debugging.md
+  checks/             the mechanical checks (bash checks/run-all.sh .)
   AGENTS.md           contributor map for agents
   LICENSE             MIT
 ```

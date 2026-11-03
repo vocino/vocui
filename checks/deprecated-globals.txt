@@ -1,0 +1,100 @@
+# Bare globals a Voc addon never reads (FAMILY.md "Sources of truth",
+# principle 8; the skill's principle 11). One name per line, `#` comments.
+#
+# Tier 1, gone: Blizzard moved the function into a C_* namespace and its
+# own Mainline UI code makes zero bare calls to it on both the `live` and
+# `forever` branches of the wow-ui-source mirror (checked 2026-10-09; the
+# only bare matches were Classic/Mists-only files and the
+# 11_0_0_SpellBookAPITransitionGuide text). A presence gate around one of
+# these is dead code that reads as a feature.
+#
+# Tier 2, leaving: still shimmed by Blizzard_Deprecated behind the
+# loadDeprecationFallbacks cvar on both branches. It works today and
+# vanishes on a patch day with no warning in the addon.
+#
+# Regenerate the evidence with tools/verify-api <name>.
+
+# --- Tier 1: C_Item ---
+GetItemInfo
+GetItemInfoInstant
+GetItemCount
+GetItemIcon
+GetItemQualityColor
+GetItemSpell
+GetDetailedItemLevelInfo
+IsEquippableItem
+IsUsableItem
+IsConsumableItem
+GetItemCooldown
+GetItemFamily
+GetItemStats
+GetItemSetInfo
+GetItemSubClassInfo
+GetItemClassInfo
+IsEquippedItem
+IsArtifactPowerItem
+GetItemUniqueness
+EquipItemByName
+
+# --- Tier 1: C_Container ---
+GetContainerItemInfo
+GetContainerNumSlots
+GetContainerItemLink
+GetContainerNumFreeSlots
+UseContainerItem
+PickupContainerItem
+GetContainerItemID
+GetContainerItemCooldown
+SplitContainerItem
+GetContainerItemQuestInfo
+GetContainerItemDurability
+GetBagName
+
+# --- Tier 1: C_AddOns ---
+GetAddOnInfo
+GetAddOnMetadata
+IsAddOnLoaded
+EnableAddOn
+DisableAddOn
+GetNumAddOns
+LoadAddOn
+IsAddOnLoadOnDemand
+GetAddOnEnableState
+GetAddOnDependencies
+GetAddOnOptionalDependencies
+
+# --- Tier 1: C_Spell / C_SpellBook ---
+GetSpellInfo
+GetSpellCooldown
+GetSpellTexture
+GetSpellLink
+GetSpellDescription
+GetSpellCharges
+IsSpellKnown
+
+# --- Tier 1: C_UnitAuras ---
+UnitAura
+UnitBuff
+UnitDebuff
+
+# --- Tier 1: C_SpecializationInfo ---
+GetSpecialization
+GetSpecializationInfo
+GetTalentInfo
+
+# --- Tier 1: C_QuestLog, C_CurrencyInfo, C_Map ---
+IsQuestFlaggedCompleted
+GetCurrencyInfo
+GetCurrencyListInfo
+GetPlayerMapPosition
+
+# --- Tier 2: leaving (Blizzard_Deprecated, live and forever) ---
+GetBattlefieldScore
+GetBattlefieldStatData
+GetMerchantCurrencies
+GetWeaponEnchantInfo
+UnitIsSpellTarget
+CancelItemTempEnchantment
+GetInspectSpecialization
+getglobal
+setglobal

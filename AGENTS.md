@@ -7,6 +7,10 @@
 - `modules/` - one folder per module, descriptor first (none yet)
 - `tests/` - headless tests (`lua tests/run.lua`)
 - `CRAFT.md` - the style paradigms: palette, type, panels, sounds, hover, anti-patterns
+- `docs/coding.md` - how Lua is written here: file shape, naming, slash grammar, chat voice, sounds, settings mechanics
+- `docs/api.md` - sources of truth and the API verification procedure; `docs/api-ledger.md` is the verdict record
+- `docs/debugging.md` - the !BugGrabber / BugSack loop
+- `checks/` - mechanical checks; `bash checks/run-all.sh .` runs them all
 
 ## Conventions
 
@@ -15,6 +19,27 @@
 - Keep Forever client metadata in a `.toc` file.
 - Forever only: verify every API against the Forever build, Lua 5.1, no deprecated globals.
 - Read `CRAFT.md` before any UI, settings, tooltip, sound, or visual work, and review against it before calling that work done. It carries the palette tokens, type levels, information order, sound table, and tooltip contract every module follows.
+
+## References
+
+This repo is self-contained: everything an agent needs is in it, and
+nothing outside it is consulted. Read by task:
+
+- Any UI, settings page, tooltip, sound, or visual work: `CRAFT.md`
+  first, then review against it before calling the work done.
+- Writing or changing Lua: `docs/coding.md` (shape, naming, slash,
+  chat, sounds, settings mechanics) and the module contract in
+  README.
+- Any Blizzard API, event, or ID: `docs/api.md` for the sources of
+  truth and the verification procedure, `docs/api-ledger.md` for the
+  recorded verdicts. Never code an API from memory or from a wiki
+  signature. A name not in the ledger gets verified against the
+  `forever` branch before it is used, added to `.luacheckrc` only
+  after verification, and given its ledger row in the same commit.
+- A bug report or a Lua error: `docs/debugging.md`.
+- Before any commit: `lua tests/run.lua`, `luacheck .`,
+  `wowlua_ls check . --severity warning`, and
+  `bash checks/run-all.sh .` all pass.
 
 ## The one system
 
