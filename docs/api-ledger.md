@@ -12,7 +12,11 @@ adds the name to `.luacheckrc`, and quote the verdict in the commit
 body.
 
 Seeded 2026-11-03 with the core scaffold's full API surface, verified
-against the `forever` branch for the build in `## Interface:` (16001).
+against the `forever` branch at Forever 1.60.1 (70755); the toc
+interface for that build is 16001. `tools/check-build.sh` compares
+the build recorded here against the mirror's current head; when it
+reports a newer build, every row is re-verified (docs/api.md, "Build
+currency") before code work continues.
 
 | Name | forever |
 | --- | --- |

@@ -7,6 +7,34 @@ Every Blizzard name the code relies on is verified against Blizzard's
 own sources for the build in `## Interface:` (16001) before it ships,
 and the verdict is recorded in `docs/api-ledger.md`.
 
+## Build currency: check before coding
+
+The Forever client is new and changes often, so a verdict ages with
+the build it was checked against. Before any code work in a session,
+run:
+
+```
+bash tools/check-build.sh
+```
+
+The script reads the latest Forever build from the head commit of
+the mirror's `forever` branch (those commits are stamped
+"<version> (<build>)"), derives the interface number, and compares
+it with `VocUI.toc` and with the build recorded at the top of
+`docs/api-ledger.md`. It answers CURRENT or STALE; it never guesses,
+and when it cannot reach the mirror it says so and fails.
+
+On STALE, no feature code is written until the bump pass is done:
+
+1. Fetch the mirror (the script already did) and diff the generated
+   docs between the old build and the new one for every namespace
+   the ledger relies on.
+2. Re-verify every ledger row against the new build; update verdicts
+   that moved, and fix any code a moved verdict breaks.
+3. Bump `## Interface:` in `VocUI.toc` and the build recorded in the
+   ledger header, in one commit whose body names the old and new
+   builds. Then code work resumes.
+
 ## Sources of truth, in order
 
 1. **Blizzard's API documentation for the build.** In the client,
@@ -105,4 +133,5 @@ Before a name is added to `.luacheckrc` or called unguarded in code:
   principle 20).
 - When `## Interface:` is bumped, the generated docs for the new
   build are diffed against the old before any code changes, and the
-  ledger's rows are re-verified in the same pass.
+  ledger's rows are re-verified in the same pass. `tools/check-build.sh`
+  is what notices the bump is needed (see "Build currency" above).

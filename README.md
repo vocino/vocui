@@ -158,7 +158,11 @@ The design target, stated plainly so modules can be judged against it:
     `docs/api.md` prescribes, and the verdict is recorded in
     `docs/api-ledger.md`. Wikis and memory are leads to confirm,
     never sources. Every global the code reads is listed in the lint
-    allowlist, added only after verification.
+    allowlist, added only after verification. And the check runs
+    before coding starts, not after something breaks: the build this
+    repo targets is confirmed current against the mirror at the start
+    of every coding session (`tools/check-build.sh`), and a moved
+    build triggers the re-verification pass before any feature code.
 20. **Headless tests, always green.** Module logic lives behind
     functions that stubbed WoW APIs can drive. No release ships with a
     failing test, a lint error, or a type error.
@@ -269,6 +273,7 @@ VocUI/
   CRAFT.md            the style paradigms every module follows
   docs/               coding.md, api.md, api-ledger.md, debugging.md
   checks/             the mechanical checks (bash checks/run-all.sh .)
+  tools/              check-build.sh, the build-currency gate
   AGENTS.md           contributor map for agents
   LICENSE             MIT
 ```

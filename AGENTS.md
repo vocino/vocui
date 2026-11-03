@@ -11,6 +11,7 @@
 - `docs/api.md` - sources of truth and the API verification procedure; `docs/api-ledger.md` is the verdict record
 - `docs/debugging.md` - the !BugGrabber / BugSack loop
 - `checks/` - mechanical checks; `bash checks/run-all.sh .` runs them all
+- `tools/check-build.sh` - build currency: is the targeted Forever build still current?
 
 ## Conventions
 
@@ -19,6 +20,19 @@
 - Keep Forever client metadata in a `.toc` file.
 - Forever only: verify every API against the Forever build, Lua 5.1, no deprecated globals.
 - Read `CRAFT.md` before any UI, settings, tooltip, sound, or visual work, and review against it before calling that work done. It carries the palette tokens, type levels, information order, sound table, and tooltip contract every module follows.
+
+## Before coding
+
+Run `bash tools/check-build.sh` before any code work, every session.
+The Forever client changes often, and the API verdicts in
+`docs/api-ledger.md` are only valid for the build they were checked
+against. The script compares the build this repo targets (the toc's
+interface, the ledger's recorded build) with the current Forever
+build on Blizzard's UI source mirror. On CURRENT, proceed. On STALE,
+do the bump pass in `docs/api.md` ("Build currency") first: no
+feature code is written against a moved build. When the script
+cannot reach the mirror it says so; treat unverified as stale for
+any API-touching work.
 
 ## References
 
