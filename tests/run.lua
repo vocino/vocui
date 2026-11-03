@@ -1834,5 +1834,443 @@ do
   _G.C_AddOns = nil
 end
 
+-- Vendor module: junk sells and gear repairs at the merchant, poor
+-- quality only, guild funds first, audit instead of acting. No old
+-- gear, no disenchanting, no button hooks: sell junk and repair.
+local VENDOR = {
+  "modules/vendor/Vendor.lua",
+  "modules/vendor/Panel.lua",
+  "modules/vendor/Repair.lua",
+  "modules/vendor/Sell.lua",
+  "modules/vendor/Tooltip.lua",
+}
+local function loadVendor()
+  local ns = loadCore()
+  for _, file in ipairs(VENDOR) do
+    assert(loadfile(file))("VocUI", ns)
+  end
+  return ns
+end
+
+-- A stub merchant world: two bags, a money purse, a repair bill, and
+-- a guild flag, all mutable per block.
+local function vendorWorld()
+  local w = {
+    combat = false,
+    money = 100,
+    bill = 0,
+    canRepair = true,
+    inGuild = false,
+    guildAllowed = false,
+    bulkCalled = false,
+    bulkEarned = 12,
+    sellEnabled = true,
+    repairCalls = {},
+    junkEnabled = true,
+  }
+  local quality = { ["item:1"] = 0, ["item:3"] = 0, ["item:4"] = 0, ["item:2"] = 2 }
+  local price = { ["item:1"] = 5, ["item:4"] = 7 }
+  _G.InCombatLockdown = function()
+    return w.combat
+  end
+  _G.NUM_BAG_SLOTS = 1
+  local slots = {
+    [0] = { { link = "item:1", quality = 0 }, { link = "item:2", quality = 2 } },
+    [1] = { { link = nil, quality = 0, backlink = "item:4" } },
+  }
+  _G.C_Container = {
+    GetContainerNumSlots = function(bag)
+      return slots[bag] ~= nil and #slots[bag] or 0
+    end,
+    GetContainerItemInfo = function(bag, slot)
+      local s = slots[bag] ~= nil and slots[bag][slot] or nil
+      if s == nil then
+        return nil
+      end
+      return { quality = s.quality, hyperlink = s.link, stackCount = 1, hasNoValue = false }
+    end,
+    GetContainerItemLink = function(bag, slot)
+      local s = slots[bag] ~= nil and slots[bag][slot] or nil
+      if s == nil then
+        return nil
+      end
+      return s.link or s.backlink
+    end,
+  }
+  _G.C_Item = {
+    GetItemInfo = function(link)
+      return link, link, quality[link], 100, 1, "Armor", "Cloth", 1, "", 132456, price[link] or 0
+    end,
+  }
+  _G.C_MerchantFrame = {
+    SellAllJunkItems = function()
+      w.bulkCalled = true
+      w.money = w.money + w.bulkEarned
+    end,
+    GetNumJunkItems = function()
+      return 2
+    end,
+    IsSellAllJunkEnabled = function()
+      return w.sellEnabled
+    end,
+  }
+  _G.GetMoney = function()
+    return w.money
+  end
+  _G.GetRepairAllCost = function()
+    return w.bill, w.canRepair
+  end
+  _G.RepairAllItems = function(useGuild)
+    w.repairCalls[#w.repairCalls + 1] = useGuild
+    w.bill = 0
+  end
+  _G.CanMerchantRepair = function()
+    return true
+  end
+  _G.CanGuildBankRepair = function()
+    return w.guildAllowed
+  end
+  _G.IsInGuild = function()
+    return w.inGuild
+  end
+  _G.GetInventoryItemLink = function(_, _)
+    return nil
+  end
+  _G.Syndicator, _G.C_AddOns = nil, nil
+  _G.GetTime = function()
+    return 1000
+  end
+  return w
+end
+
+-- Vendor: descriptor, state location, Forever rows
+do
+  vendorWorld()
+  local ns = loadVendor()
+  ns.db = {}
+  local vendor = ns.vendor
+  ns.modules.InitAll()
+  check("vendor descriptor registered", vendor.descriptor.name == "vendor" and vendor.descriptor.default == true)
+  check(
+    "vendor state lives under modules.vendor",
+    type(ns.db.modules) == "table" and ns.db.modules.vendor.enabled == true and ns.db.vendor == nil
+  )
+  local keys = {}
+  for _, row in ipairs(vendor.OPTIONS) do
+    keys[#keys + 1] = row.key
+  end
+  check(
+    "vendor options present in order",
+    table.concat(keys, ",") == "enabled,sellJunk,autoRepair,guildFunds,audit,tooltipPrice"
+  )
+  check("junk means poor quality only", vendor.ScanJunk()[1].link == "item:1")
+  check("vendor help lines keep config second to last", ns.HELP[#ns.HELP - 1]:find("config", 1, true) ~= nil)
+  local hasVendorLine = false
+  for _, line in ipairs(ns.HELP) do
+    if line:find("/vui vendor", 1, true) ~= nil then
+      hasVendorLine = true
+    end
+  end
+  check("vendor help teaches the slash", hasVendorLine)
+  local saved = _G.C_MerchantFrame
+  _G.C_MerchantFrame = nil
+  check("unavailable merchant hides", vendor.IsAvailable() == false)
+  _G.C_MerchantFrame = saved
+end
+
+-- Vendor scan: guest cache first, Blizzard walk behind it
+do
+  vendorWorld()
+  local ns = loadVendor()
+  local vendor = ns.vendor
+  _G.Syndicator = {
+    API = {
+      IsReady = function()
+        return true
+      end,
+      GetCurrentInventory = function()
+        return {
+          { itemLink = "item:1" },
+          { itemLink = "item:2" },
+          { itemLink = "item:3" },
+          { itemLink = "item:9" },
+        }
+      end,
+    },
+  }
+  local found = vendor.ScanJunk()
+  check("guest junk is quality zero only", #found == 2 and found[1].link == "item:1" and found[2].link == "item:3")
+  check("guest total counts vendor value", vendor.JunkTotal(found) == 5)
+  _G.Auctionator = {
+    API = {
+      v1 = {
+        IsReady = function()
+          return true
+        end,
+        GetAuctionPriceByItemLink = function(_, link)
+          if link == "item:1" then
+            return 10000
+          end
+          return nil
+        end,
+      },
+    },
+  }
+  local noted = {}
+  local realSay = ns.say
+  ns.say = function(msg)
+    noted[#noted + 1] = msg
+  end
+  vendor.AuditReport(found)
+  ns.say = realSay
+  check("audit annotates auction values only", noted[1] == "audit: would sell item:1 for 5c (auction 1g)")
+  check("worthless junk audits at zero", noted[2] == "audit: would sell item:3 for 0c")
+  _G.Auctionator = nil
+  _G.Syndicator.API.IsReady = function()
+    return "loading"
+  end
+  local walked = vendor.ScanJunk()
+  check(
+    "unsettled guests fall back to the walk",
+    #walked == 2 and walked[1].link == "item:1" and walked[2].link == "item:4"
+  )
+  check("walk total counts both bags", vendor.JunkTotal(walked) == 12)
+  _G.Syndicator = nil
+end
+
+-- Vendor sell: bulk call, announced total, audit sells nothing
+do
+  local w = vendorWorld()
+  local ns = loadVendor()
+  ns.db = {}
+  local said = {}
+  ns.say = function(msg)
+    said[#said + 1] = msg
+  end
+  ns.play = function() end
+  ns.modules.InitAll()
+  local vendor = ns.vendor
+  vendor.OnMerchant()
+  check("junk sells through the bulk call", w.bulkCalled == true)
+  check("the sale announces its total", said[1] == "sold junk for 12c")
+  ns.db.modules.vendor.audit = true
+  w.bulkCalled = false
+  vendor.OnMerchant()
+  check("audit sells nothing", w.bulkCalled == false)
+  check(
+    "audit names each line and the total",
+    said[2] == "audit: would sell item:1 for 5c"
+      and said[3] == "audit: would sell item:4 for 7c"
+      and said[4] == "audit: 2 items for 12c"
+  )
+  ns.db.modules.vendor.audit = false
+  w.sellEnabled = false
+  w.bulkCalled = false
+  said = {}
+  vendor.OnMerchant()
+  check("a disabled sell button ends the visit", w.bulkCalled == false and #said == 0)
+  w.sellEnabled = true
+  w.combat = true
+  vendor.OnMerchant()
+  check("combat gates the whole visit", w.bulkCalled == false and #said == 0)
+end
+
+-- Vendor repair: guild first when allowed, personal next, shortfall said once
+do
+  local w = vendorWorld()
+  local ns = loadVendor()
+  ns.db = {}
+  local said = {}
+  ns.say = function(msg)
+    said[#said + 1] = msg
+  end
+  ns.play = function() end
+  ns.modules.InitAll()
+  local vendor = ns.vendor
+  check(
+    "funds decide guild, personal, short",
+    vendor.DecideFunds(500, true, true, 100) == "guild"
+      and vendor.DecideFunds(500, true, false, 600) == "personal"
+      and vendor.DecideFunds(500, true, false, 100) == "short"
+      and vendor.DecideFunds(0, true, false, 100) == "none"
+      and vendor.DecideFunds(500, false, false, 600) == "none"
+  )
+  check("shortfall counts the missing copper", select(2, vendor.DecideFunds(500, true, false, 100)) == 400)
+  ns.db.modules.vendor.sellJunk = false
+  w.bill, w.inGuild, w.guildAllowed = 500, true, true
+  vendor.OnMerchant()
+  check("guild repairs announce guild funds", w.repairCalls[1] == true and said[1] == "repaired for 5s (guild funds)")
+  w.bill, w.guildAllowed, w.money = 500, false, 600
+  said = {}
+  vendor.OnMerchant()
+  check("personal repairs announce the bill", w.repairCalls[2] == false and said[1] == "repaired for 5s")
+  w.bill, w.money = 500, 100
+  said = {}
+  w.repairCalls = {}
+  vendor.OnMerchant()
+  check(
+    "an uncovered bill says what is missing once",
+    #w.repairCalls == 0 and #said == 1 and said[1] == "short 4s for repairs"
+  )
+  w.bill = 0
+  said = {}
+  vendor.OnMerchant()
+  check("no bill means no repair line", #said == 0)
+end
+
+-- Vendor tooltip: Vendor line only when no vendor line shows
+do
+  vendorWorld()
+  local hooks = {}
+  _G.hooksecurefunc = function(obj, name, fn)
+    hooks[#hooks + 1] = { obj = obj, name = name, fn = fn }
+  end
+  _G.GameTooltip = {}
+  local ns = loadVendor()
+  ns.db = {}
+  ns.modules.InitAll()
+  local vendor = ns.vendor
+  check("tooltip hooks all three setters", #hooks == 3 and hooks[1].name == "SetBagItem")
+  check("hooks install once", vendor.InstallTooltip() == nil and #hooks == 3)
+  local function tipWith(lines)
+    local left = {}
+    for i, text in ipairs(lines) do
+      left[i] = {
+        GetText = function()
+          return text
+        end,
+      }
+    end
+    local added = {}
+    return {
+      _left = left,
+      NumLines = function(self)
+        return #self._left
+      end,
+      GetLeftLine = function(self, i)
+        return self._left[i]
+      end,
+      AddLine = function(self, text)
+        added[#added + 1] = text
+      end,
+      added = added,
+    }
+  end
+  local tip = tipWith({ "Gray Boots", "Some other line" })
+  check("clean tooltips gain the line", vendor.MaybeAddPrice(tip, "item:1") == true)
+  check("the line reads vendor and price", tip.added[1] == "Vendor: 5c")
+  check("vendor lines dedupe", vendor.MaybeAddPrice(tipWith({ "Vendor: 9s" }), "item:1") == false)
+  _G.SELL_PRICE = "Sell Price"
+  check("native lines dedupe", vendor.MaybeAddPrice(tipWith({ "Sell Price: 1c" }), "item:1") == false)
+  _G.SELL_PRICE = nil
+  check("priceless items stay quiet", vendor.MaybeAddPrice(tipWith({}), "item:9") == false)
+  ns.db.modules.vendor.tooltipPrice = false
+  check("the row gates the line", vendor.MaybeAddPrice(tipWith({}), "item:1") == false)
+  _G.hooksecurefunc, _G.GameTooltip = nil, nil
+end
+
+-- Vendor slash and panel: toggle sounds and says, rows bind live
+do
+  vendorWorld()
+  local ns = loadVendor()
+  ns.db = {}
+  local said, played = {}, {}
+  ns.say = function(msg)
+    said[#said + 1] = msg
+  end
+  ns.play = function(kind)
+    played[#played + 1] = kind
+  end
+  ns.modules.InitAll()
+  local vendor = ns.vendor
+  _G.SlashCmdList.VOCUI("vendor off")
+  check(
+    "slash turns the module off with sound",
+    vendor.opts().enabled == false and played[#played] == "off" and vendor.frame.events.MERCHANT_SHOW == nil
+  )
+  _G.SlashCmdList.VOCUI("vendor on")
+  check(
+    "slash turns the module on with sound",
+    vendor.opts().enabled == true and vendor.frame.events.MERCHANT_SHOW ~= nil
+  )
+  local before = #played
+  _G.SlashCmdList.VOCUI("vendor bogus")
+  check("unknown vendor subcommand only prints help", #played == before)
+  _G.SlashCmdList.VOCUI("vendor")
+  check("bare vendor toggles the module", vendor.opts().enabled == false)
+end
+
+-- Vendor panel: a subcategory under VocUI, six rows, live callbacks
+do
+  vendorWorld()
+  local registered, subcats = {}, {}
+  local headers = {}
+  _G.Settings = {
+    RegisterVerticalLayoutCategory = function(n)
+      return {
+        name = n,
+        GetID = function()
+          return 7
+        end,
+      }
+    end,
+    RegisterVerticalLayoutSubcategory = function(parent, n)
+      local sub = { name = n, parent = parent }
+      subcats[#subcats + 1] = sub
+      return sub
+    end,
+    RegisterAddOnCategory = function() end,
+    OpenToCategory = function() end,
+    RegisterAddOnSetting = function(page, variable, key, tbl, vtype, label, default)
+      local s = { page = page, variable = variable, key = key }
+      s.SetValueChangedCallback = function(_, fn)
+        s.callback = fn
+      end
+      registered[#registered + 1] = s
+      return s
+    end,
+    CreateCheckbox = function()
+      return {}
+    end,
+  }
+  _G.SettingsPanel = {
+    GetLayout = function()
+      return {
+        AddInitializer = function(_, init)
+          headers[#headers + 1] = init
+        end,
+      }
+    end,
+  }
+  _G.CreateSettingsListSectionHeaderInitializer = function(text)
+    return text
+  end
+  local ns = loadVendor()
+  ns.db = {}
+  ns.modules.InitAll()
+  ns.settings.Init()
+  local vendor = ns.vendor
+  check("vendor page is a subcategory under VocUI", #subcats == 1 and subcats[1].name == "Vendor")
+  local keys = {}
+  for _, s in ipairs(registered) do
+    keys[#keys + 1] = s.key
+  end
+  check(
+    "panel registers the rows in order",
+    table.concat(keys, ",") == "enabled,sellJunk,autoRepair,guildFunds,audit,tooltipPrice"
+  )
+  check("panel leads with the job", headers[1] == vendor.descriptor.job)
+  local enabledSetting
+  for _, s in ipairs(registered) do
+    if s.key == "enabled" then
+      enabledSetting = s
+    end
+  end
+  ns.db.modules.vendor.enabled = false
+  enabledSetting.callback("enabled")
+  check("panel toggle applies live", vendor.frame.events.MERCHANT_SHOW == nil)
+  _G.Settings, _G.SettingsPanel, _G.CreateSettingsListSectionHeaderInitializer = nil, nil, nil
+end
+
 print(string.format("%d passed, %d failed", pass, fail))
 os.exit(fail > 0 and 1 or 0)

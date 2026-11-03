@@ -97,6 +97,12 @@ harness). Modules so far:
   reputation with Rep/hr at max level. The Forever half of VocXP; the
   Regalia set stayed behind in VocXP, which is unchanged. Its own page
   under Settings > AddOns > VocUI and `/vui xp` subcommands.
+- **Vendor** (`modules/vendor/`): sells poor-quality junk and repairs
+  gear automatically at the merchant, guild funds first, audit mode
+  instead of acting, and a deduped Vendor line in item tooltips. The
+  Forever half of VocVendor; old gear, disenchanting, and the button
+  hook stayed behind in VocVendor, which is unchanged. Its own page
+  under Settings > AddOns > VocUI and `/vui vendor` subcommands.
 
 From here the package grows the way it was designed to: a module at
 a time, added while playing, each

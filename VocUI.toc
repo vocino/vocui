@@ -35,3 +35,8 @@ modules/xp/Modes.lua
 modules/xp/Panel.lua
 modules/xp/Rate.lua
 modules/xp/Rep.lua
+modules/vendor/Vendor.lua
+modules/vendor/Panel.lua
+modules/vendor/Repair.lua
+modules/vendor/Sell.lua
+modules/vendor/Tooltip.lua
