@@ -5,16 +5,33 @@ one player and the way he actually plays. VocUI is not a suite for
 everyone. It is a personal instrument: one package, many small modules,
 every one of them there because it serves a real habit at the keyboard.
 
+It grows while he plays. There is no roadmap and no release train: when
+a session surfaces a need, a module gets built for it, and the package
+he logs into next week is a little more his than the one from the week
+before. This repository is that running record.
+
 This README is the constitution. It defines the principles the code will
 follow before any feature code exists, and it keeps defining them as the
 package grows. Features come later, one module at a time, and every
 module has to name the principles it serves. A feature that cannot name
 one does not ship.
 
+## If you are not me
+
+You are welcome here. The license is MIT; take it, use it, fork it. But
+know what you are looking at: an addon fitted to one person's setup,
+habits, keybinds, and taste, maintained for an audience of one. There is
+no support, no feature request queue, and no plan to reshape anything
+for another player's game. If it fits your play too, that is a happy
+accident, not a design goal.
+
 ## What this is
 
 - One addon package for the Forever client only, installed as a single
   folder, updated as a single release.
+- A work in progress by design. It is never finished, because the play
+  it serves is never finished; it just keeps accumulating the modules
+  its player has needed so far.
 - A collection of independent modules under a small shared core. Each
   module does one job. The package is comprehensive because the modules
   add up, not because any module is big.
@@ -201,9 +218,11 @@ wrong until this file says otherwise.
 
 ## Status
 
-Principles first, on purpose. There is no feature code yet. The first
-feature set will be chosen against these principles, built as modules,
-and recorded here when it lands.
+Principles first, on purpose. The core scaffolding is in place (loader,
+settings store, palette, sounds, chat, slash, and the headless test
+harness), and there are no modules yet. From here the package grows the
+way it was designed to: a module at a time, added while playing, each
+one recorded here when it lands.
 
 ---
 
