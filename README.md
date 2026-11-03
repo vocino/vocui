@@ -92,6 +92,11 @@ harness). Modules so far:
   Bag contents come from Syndicator when it is present and settled
   (else Blizzard's own bag walk), and item values from Auctionator
   with a vendor fallback; both are guests, never requirements.
+- **XP** (`modules/xp/`): XP per hour and time to level on its own
+  bar, with rested reach and ready-to-turn-in quest XP overlaid, and
+  reputation with Rep/hr at max level. The Forever half of VocXP; the
+  Regalia set stayed behind in VocXP, which is unchanged. Its own page
+  under Settings > AddOns > VocUI and `/vui xp` subcommands.
 
 From here the package grows the way it was designed to: a module at
 a time, added while playing, each

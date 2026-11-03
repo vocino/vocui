@@ -21,17 +21,24 @@ globals = {
 -- presence-gated at the call site; a missing API is never an error.
 read_globals = {
   "Auctionator", "Syndicator", -- third-party guests, presence-gated at every call
-  "C_AddOns", "C_Container", "C_Item", "C_PaperDollInfo", "C_PetBattles",
+  "C_AddOns", "C_Container", "C_GossipInfo", "C_Item", "C_MajorFactions", "C_PaperDollInfo", "C_PetBattles",
+  "C_PvP", "C_QuestLog", "C_Reputation", "C_UnitAuras",
   "C_SpecializationInfo", "C_Timer",
   "CreateFrame",
   "CreateSettingsListSectionHeaderInitializer",
   "GameTooltip",
-  "GetAverageItemLevel", "GetInventoryItemLink", "GetTime",
-  "InCombatLockdown", "NUM_BAG_SLOTS",
+  "EventRegistry", "EXHAUSTION_TICK_OFFSET_Y",
+  "GetAverageItemLevel", "GetInventoryItemLink", "GetMaxLevelForLatestExpansion", "GetMaxLevelForPlayerExpansion",
+  "GetMaxPlayerLevel", "GetQuestLogRewardXP", "GetTime", "GetXPExhaustion",
+  "InCombatLockdown", "IsInInstance", "IsTrialAccount", "IsXPUserDisabled",
+  "MAX_REPUTATION_REACTION", "NUM_BAG_SLOTS",
   "PaperDollFrame", "PaperDollFrame_SetItemLevel",
   "PlaySound", "SOUNDKIT",
-  "Settings", "SettingsPanel",
-  "UnitAffectingCombat", "UnitClass", "UnitIsDeadOrGhost", "UnitLevel",
+  "PlayerIsTimerunning",
+  "Settings", "SettingsPanel", "STATUS_BAR_CONTAINER_WIDTH", "STATUS_BAR_NUM_SEGMENTS",
+  "STATUS_BAR_SIZE_ADJUSTMENT", "StatusTrackingBarManager",
+  "UIParent", "UnitAffectingCombat", "UnitClass", "UnitGUID", "UnitIsDeadOrGhost", "UnitLevel",
+  "UnitXP", "UnitXPMax",
   "hooksecurefunc",
 }
 

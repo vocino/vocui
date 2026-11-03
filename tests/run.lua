@@ -1169,5 +1169,670 @@ do
   _G.GameTooltip = nil
 end
 
+-- XP module: the Forever build of the VocXP job. Rate and reputation
+-- math, rested and quest overlays, War Mode and aura detection without
+-- Forever suggestions, and no Regalia (retail-only, never on Forever).
+local XP = {
+  "modules/xp/XP.lua",
+  "modules/xp/Bar.lua",
+  "modules/xp/Bonuses.lua",
+  "modules/xp/Modes.lua",
+  "modules/xp/Panel.lua",
+  "modules/xp/Rate.lua",
+  "modules/xp/Rep.lua",
+}
+local function loadXP()
+  local ns = loadCore()
+  for _, file in ipairs(XP) do
+    assert(loadfile(file))("VocUI", ns)
+  end
+  return ns
+end
+
+-- A stub world for xp tests: leveling snapshot reads, a monotonic
+-- clock, and no optional APIs unless a block installs them.
+local function xpWorld()
+  local w = { time = 1000, combat = false }
+  _G.UnitXP = function()
+    return 400
+  end
+  _G.UnitXPMax = function()
+    return 1000
+  end
+  _G.UnitLevel = function()
+    return 10
+  end
+  _G.UnitGUID = function()
+    return "p1"
+  end
+  _G.GetTime = function()
+    return w.time
+  end
+  _G.InCombatLockdown = function()
+    return w.combat
+  end
+  _G.UIParent = {}
+  _G.C_Timer, _G.C_AddOns, _G.C_QuestLog, _G.C_Reputation, _G.C_MajorFactions = nil, nil, nil, nil, nil
+  _G.C_GossipInfo, _G.C_PvP, _G.C_UnitAuras = nil, nil, nil
+  _G.GetXPExhaustion, _G.IsXPUserDisabled, _G.IsInInstance = nil, nil, nil
+  _G.GetQuestLogRewardXP = nil
+  _G.GetMaxLevelForLatestExpansion, _G.GetMaxLevelForPlayerExpansion = nil, nil
+  _G.GetMaxPlayerLevel, _G.PlayerIsTimerunning, _G.IsTrialAccount = nil, nil, nil
+  _G.StatusTrackingBarManager = nil
+  _G.STATUS_BAR_CONTAINER_WIDTH, _G.STATUS_BAR_NUM_SEGMENTS = nil, nil
+  _G.STATUS_BAR_SIZE_ADJUSTMENT, _G.EXHAUSTION_TICK_OFFSET_Y = nil, nil
+  _G.MAX_REPUTATION_REACTION = nil
+  _G.EventRegistry = nil
+  _G.GameTooltip = nil
+  return w
+end
+
+-- XP: descriptor, state location, Forever-only options
+do
+  xpWorld()
+  local ns = loadXP()
+  ns.db = {}
+  local xp = ns.xp
+  ns.modules.InitAll()
+  check(
+    "xp descriptor registered",
+    ns.modules.GetAll()[1] == xp.descriptor and xp.descriptor.name == "xp" and xp.descriptor.default == true
+  )
+  check(
+    "xp state lives under modules.xp",
+    type(ns.db.modules) == "table" and ns.db.modules.xp.enabled == true and ns.db.xp == nil
+  )
+  local keys = {}
+  for _, row in ipairs(xp.OPTIONS) do
+    keys[row.key] = true
+  end
+  check(
+    "xp options present",
+    keys.enabled and keys.announce and keys.hideDefault and keys.repMode and keys.followLatest and keys.locked
+  )
+  check("retail regalia never crossed over", xp.regaliaPieces == nil and xp.regaliaReduction == nil)
+  check("no flavor detection on a forever-only package", xp.clientFlavor == nil)
+  check(
+    "xp help lines keep config second to last",
+    ns.HELP[#ns.HELP - 1]:find("config", 1, true) ~= nil and ns.HELP[3]:find("/vui xp", 1, true) ~= nil
+  )
+  _G.UnitXP, _G.UnitXPMax, _G.UnitLevel = nil, nil, nil
+  check("unavailable xp stays hidden", xp.IsAvailable() == false)
+end
+
+-- XP rate math: tracker windows, gains, estimate statuses
+do
+  xpWorld()
+  local ns = loadXP()
+  local xp = ns.xp
+  local tr = xp.newTracker(0)
+  check("fresh tracker is empty", tr.sum == 0 and tr.head == 1)
+  check("zero and negative awards never count", xp.addAward(tr, 10, 0) == false and xp.addAward(tr, 10, -5) == false)
+  xp.addAward(tr, 10, 100)
+  xp.addAward(tr, 20, 100)
+  local snap = { level = 10, xp = 0, req = 1000, capped = false }
+  local est = xp.estimate(tr, 20, snap, false)
+  check("early observation is collecting", est.status == "collecting" and est.xpPerHour == 200 / 20 * 3600)
+  est = xp.estimate(tr, 200, snap, false)
+  check("partial window is warming up", est.status == "warming-up")
+  est = xp.estimate(tr, 700, snap, false)
+  check("expired awards leave the window", est.windowXp == 0 and est.status == "no-recent-xp")
+  local tr2 = xp.newTracker(0)
+  xp.addAward(tr2, 650, 100)
+  est = xp.estimate(tr2, 700, snap, false)
+  check("full window with earnings is ready", est.status == "ready" and est.etaSeconds == 1000 * 600 / 100)
+  local tr3 = xp.newTracker(0)
+  xp.addAward(tr3, 101, 100)
+  est = xp.estimate(tr3, 700, snap, false)
+  check("a quiet full window is idle", est.status == "idle")
+  check("paused never estimates", xp.estimate(tr2, 700, snap, true).status == "paused")
+  check(
+    "capped never estimates",
+    xp.estimate(tr2, 700, { level = 60, xp = 0, req = 1, capped = true }, false).status == "capped"
+  )
+  check("junk snapshots are unavailable", xp.estimate(tr2, 700, nil, false).status == "unavailable")
+  local done = { level = 10, xp = 1000, req = 1000, capped = false }
+  local doneEst = xp.estimate(tr2, 700, done, false)
+  check("a full bar awaits the level update", doneEst.status == "awaiting-level-update" and doneEst.etaSeconds == 0)
+  check(
+    "gains reconstruct across snapshots",
+    xp.gain({ level = 10, xp = 900, req = 1000, capped = false }, { level = 10, xp = 950, req = 1000, capped = false })
+      == 50
+  )
+  check(
+    "gains carry across one ding",
+    xp.gain({ level = 10, xp = 900, req = 1000, capped = false }, { level = 11, xp = 100, req = 2000, capped = false })
+      == 200
+  )
+  check(
+    "losses and jumps resync",
+    xp.gain({ level = 10, xp = 900, req = 1000, capped = false }, { level = 10, xp = 100, req = 1000, capped = false })
+        == nil
+      and xp.gain(
+          { level = 10, xp = 900, req = 1000, capped = false },
+          { level = 12, xp = 100, req = 1000, capped = false }
+        )
+        == nil
+  )
+  check("longer memory steadies the forecast", xp.etaSeconds(tr2, 700, 500) == 500 * 600 / 100)
+  check("empty memory forecasts nothing", xp.etaSeconds(xp.newTracker(700), 700, 500) == nil)
+  tr2.events = { { time = 1, amount = 1 }, { time = 2, amount = 2 }, { time = 650, amount = 100 } }
+  tr2.head = 3
+  tr2.sum = 100
+  xp.compact(tr2)
+  check("compaction drops dead slots", tr2.head == 1 and #tr2.events == 1 and tr2.sum == 100)
+end
+
+-- XP text: titles, subtitles, segments, labels, summaries
+do
+  xpWorld()
+  local ns = loadXP()
+  local xp = ns.xp
+  local ready = { status = "ready", xpPerHour = 144000, etaSeconds = 1500, windowSeconds = 600 }
+  check("title reads rate and eta", xp.titleText(ready) == "144k XP/hr · 25m")
+  ready.unit = "Rep"
+  check("rep titles speak rep", xp.titleText(ready) == "144k Rep/hr · 25m")
+  ready.unit = nil
+  ready.etaSeconds = nil
+  check("title without eta reads pace alone", xp.titleText(ready) == "144k XP/hr")
+  check("collecting title admits it", xp.titleText({ status = "collecting" }) == "Collecting data")
+  check("reps at cap name the rank", xp.titleText({ status = "rep-capped", capLabel = "Exalted" }) == "Exalted")
+  check(
+    "subtitles name the span",
+    xp.subText({ status = "ready", windowSeconds = 600 }) == "Last 10m"
+      and xp.subText({ status = "warming-up", observedSeconds = 180, windowSeconds = 600 }) == "Warming up · last 3m of 10m"
+      and xp.subText({ status = "idle", idleSeconds = 120, windowSeconds = 600 }) == "Idle 2m · last 10m"
+      and xp.subText({ status = "collecting" }) == "Collecting data"
+      and xp.subText({ status = "no-recent-xp", windowSeconds = 600 }) == "No XP in the last 10m"
+  )
+  local seg = xp.barSegments({ level = 10, xp = 400, req = 1000, capped = false }, 200, 100)
+  check(
+    "overlays stack in play order",
+    seg.progress == 0.4 and seg.questEnd == 0.5 and seg.restedEnd == 0.7 and seg.questPct == 10
+  )
+  check("capped snapshots have no bar", xp.barSegments({ level = 60, xp = 0, req = 1, capped = true }, 0, 0) == nil)
+  check(
+    "bar label reads level and percent",
+    xp.barLabel({ level = 10, xp = 400, req = 1000 }, seg) == "10  400/1k (40%)"
+  )
+  check("stats line names quests and rested", xp.subStatsLine(seg, 2) == "2 quests ready: 10% · Rested: 20%")
+  check("stats line hides when neither shows", xp.subStatsLine(seg, 0) == "Rested: 20%")
+  local acc = xp.newSummary()
+  check("single gains stay silent", xp.formatSummary(acc) == nil)
+  acc = xp.noteSummaryGain(acc, 1000, "xp", nil, nil, 200, false)
+  check("one gain still stays silent", xp.formatSummary(acc) == nil)
+  acc = xp.noteSummaryGain(acc, 1000.05, "xp", nil, nil, 100, false)
+  check("bursts net to one line", xp.formatSummary(acc) == "+300 XP")
+  local racc = xp.newSummary()
+  racc = xp.noteSummaryGain(racc, 1000, "rep", 1, "Stormwind", 200, false)
+  racc = xp.noteSummaryGain(racc, 1000.05, "rep", 2, "Orgrimmar", 100, false)
+  check("rep bursts name every faction", xp.formatSummary(racc) == "+300 rep (Stormwind 200, Orgrimmar 100)")
+  local qacc = xp.newSummary()
+  qacc = xp.noteSummaryGain(qacc, 1000, "rep", 1, "Stormwind", 100, false)
+  qacc = xp.noteSummaryGain(qacc, 1000.2, "rep", 1, "Stormwind", 100, false)
+  check("quiet spells split bursts", qacc.count == 1)
+  local bacc = xp.newSummary()
+  bacc = xp.noteSummaryGain(bacc, 1000, "xp", nil, nil, 100, true)
+  bacc = xp.noteSummaryGain(bacc, 1000.05, "xp", nil, nil, 100, true)
+  check("combat holds the burst open", bacc.count == 2 and xp.formatSummary(bacc) == "+200 XP in combat")
+end
+
+-- XP reputation math: every faction kind normalizes to one shape
+do
+  xpWorld()
+  local ns = loadXP()
+  local xp = ns.xp
+  check(
+    "only real factions track",
+    xp.validRepRow({ factionID = 1, name = "A" }) == true
+      and xp.validRepRow({ factionID = 0, name = "A" }) == false
+      and xp.validRepRow({ factionID = 1, name = "A", isHeader = true }) == false
+      and xp.validRepRow({ factionID = 1, name = "A", isHeader = true, isHeaderWithRep = true }) == true
+  )
+  local std = {
+    factionID = 1,
+    name = "A",
+    reaction = 5,
+    currentReactionThreshold = 3000,
+    nextReactionThreshold = 9000,
+    currentStanding = 6000,
+  }
+  local standing = xp.repStandardProgress(std)
+  check("standard progress reads in-rank", standing.have == 3000 and standing.need == 6000 and standing.capped == false)
+  check("rank labels read friendly", xp.repBarLabel(standing) == "A  3k/6k (50%)")
+  check(
+    "rank context names the next rank",
+    xp.repStatsLine(standing) == "Friendly · 50% to Honored" and xp.standingName(8) == "Exalted"
+  )
+  local cap = {
+    factionID = 1,
+    name = "A",
+    reaction = 8,
+    currentReactionThreshold = 0,
+    nextReactionThreshold = 0,
+    currentStanding = 999,
+  }
+  check("exalted caps the bar", xp.repStandardProgress(cap).capped == true)
+  local ren = xp.repRenownProgress(
+    { factionID = 2, name = "B", currentStanding = 1500 },
+    { renownLevel = 7, renownLevelThreshold = 2500 },
+    false
+  )
+  check("renown reads the live standing", ren.have == 1500 and ren.need == 2500 and ren.levelLabel == "Renown 7")
+  check("renown blues the fill", xp.repAtlas(ren) == xp.REP_FILL_BLUE)
+  local par = xp.repParagonProgress({ factionID = 3, name = "C" }, 12500, 10000, false)
+  check("paragon wraps the cycle", par.have == 2500 and par.need == 10000 and par.capped == false)
+  local pen = xp.repParagonProgress({ factionID = 3, name = "C" }, 12500, 10000, true)
+  check("pending rewards pin the bar full", pen.have == 10000 and pen.pending == true)
+  local fr = xp.repFriendshipProgress(
+    { factionID = 4, name = "D" },
+    { reaction = "Friend", standing = 5000, reactionThreshold = 0, nextThreshold = 8400 },
+    { currentLevel = 3 }
+  )
+  check("friendship reads between ranks", fr.have == 5000 and fr.need == 8400 and fr.capped == false)
+  local frMax = xp.repFriendshipProgress(
+    { factionID = 4, name = "D" },
+    { reaction = "Best Friend", standing = 9999 },
+    { currentLevel = 6 }
+  )
+  check("max friendship caps", frMax.capped == true)
+  check(
+    "same-kind gains are exact",
+    xp.repGain(
+      { id = 1, kind = "standing", level = 5, have = 3000, need = 6000, capped = false },
+      { id = 1, kind = "standing", level = 5, have = 4000, need = 6000, capped = false }
+    ) == 1000
+  )
+  check(
+    "rank-ups carry the remainder",
+    xp.repGain(
+      { id = 1, kind = "standing", level = 5, have = 5000, need = 6000, capped = false },
+      { id = 1, kind = "standing", level = 6, have = 1000, need = 12000, capped = false }
+    ) == 2000
+  )
+  check(
+    "losses and swaps resync",
+    xp.repGain(
+      { id = 1, kind = "standing", level = 5, have = 5000, need = 6000, capped = false },
+      { id = 1, kind = "standing", level = 5, have = 1000, need = 6000, capped = false }
+    )
+        == nil
+      and xp.repGain(
+          { id = 1, kind = "standing", level = 5, have = 5000, need = 6000, capped = false },
+          { id = 2, kind = "standing", level = 5, have = 5000, need = 6000, capped = false }
+        )
+        == nil
+  )
+  check(
+    "paragon gains read lifetime deltas",
+    xp.repGain(
+      { id = 3, kind = "paragon", raw = 10000, capped = false },
+      { id = 3, kind = "paragon", raw = 10250, capped = false }
+    ) == 250
+  )
+  check("wild reactions read friendly", xp.repAtlas({ kind = "standing", level = 99 }) == xp.REP_FILL[5])
+  check("reaction ceiling falls back to eight", xp.maxRepReaction() == 8)
+  _G.MAX_REPUTATION_REACTION = 10
+  check("reaction ceiling reads the client", xp.maxRepReaction() == 10)
+  _G.MAX_REPUTATION_REACTION = nil
+  check("unknown reactions name the rank", xp.standingName(99) == "Rank 99")
+end
+
+-- XP quest scan: ready turn-ins sum, selection restores, gaps degrade
+do
+  xpWorld()
+  local selected = 100
+  _G.C_QuestLog = {
+    GetNumQuestLogEntries = function()
+      return 3
+    end,
+    GetInfo = function(i)
+      return { questID = 100 + i, isHeader = false }
+    end,
+    ReadyForTurnIn = function(id)
+      return id == 102
+    end,
+    GetSelectedQuest = function()
+      return selected
+    end,
+    SetSelectedQuest = function(id)
+      selected = id
+    end,
+  }
+  _G.GetQuestLogRewardXP = function()
+    return 500
+  end
+  local ns = loadXP()
+  local xp = ns.xp
+  local total, count = xp.scanQuestXp()
+  check("ready quests sum their rewards", total == 500 and count == 1 and selected == 100)
+  _G.C_QuestLog.GetInfo = function()
+    return nil
+  end
+  total, count = xp.scanQuestXp()
+  check("unreadable logs overlay nothing", total == 0 and count == 0)
+  _G.C_QuestLog, _G.GetQuestLogRewardXP = nil, nil
+  total, count = xp.scanQuestXp()
+  check("missing quest api overlays nothing", total == 0 and count == 0)
+end
+
+-- XP snapshots and cap detection mirror the client's own rules
+do
+  xpWorld()
+  local ns = loadXP()
+  local xp = ns.xp
+  local snap = xp.readSnapshot()
+  check("leveling snapshots read live", snap.level == 10 and snap.xp == 400 and snap.req == 1000)
+  _G.GetMaxPlayerLevel = function()
+    return 60
+  end
+  check("per-player max caps the bar", xp.isLevelCapped(60, 100000) == true)
+  _G.GetMaxLevelForLatestExpansion = function()
+    return 70
+  end
+  _G.GetMaxLevelForPlayerExpansion = function()
+    return 60
+  end
+  check("expansion max wins below the latest", xp.effectiveMaxLevel() == 60)
+  _G.PlayerIsTimerunning = function()
+    return true
+  end
+  check("timerunning compares against the latest", xp.effectiveMaxLevel() == 60)
+  _G.GetMaxPlayerLevel, _G.GetMaxLevelForLatestExpansion = nil, nil
+  _G.GetMaxLevelForPlayerExpansion, _G.PlayerIsTimerunning = nil, nil
+  _G.GetXPExhaustion = function()
+    return 200
+  end
+  check("rested reads the exhaustion value", xp.restedAmount() == 200)
+  _G.IsXPUserDisabled = function()
+    return true
+  end
+  check("disabled xp hides rested", xp.restedAmount() == nil)
+  _G.GetXPExhaustion, _G.IsXPUserDisabled = nil, nil
+end
+
+-- XP bonuses: detection shows, only rested is ever suggested
+do
+  xpWorld()
+  local ns = loadXP()
+  local xp = ns.xp
+  check("no apis means no bonuses", #xp.bonusParts("xp") == 0)
+  local missing = xp.missingParts("xp")
+  check("forever suggests only rested", #missing == 1 and missing[1] == "Rested (rest in town)")
+  _G.GetXPExhaustion = function()
+    return 100
+  end
+  check("rested shows when active", xp.bonusParts("xp")[1] == "Rested" and #xp.missingParts("xp") == 0)
+  _G.C_PvP = {
+    IsWarModeDesired = function()
+      return true
+    end,
+    GetWarModeRewardBonus = function()
+      return 15
+    end,
+  }
+  check("lit war mode shows live", xp.bonusParts("xp")[1] == "+15% War Mode")
+  check("war mode is never suggested", #xp.missingParts("xp") == 0)
+  _G.C_UnitAuras = {
+    GetPlayerAuraBySpellID = function(id)
+      if id == 46668 then
+        return {}
+      end
+      return nil
+    end,
+  }
+  local buffs = xp.bonusParts("xp")
+  check("present auras show", buffs[2] == "+10% WHEE!" and buffs[3] == "Rested")
+  _G.IsInInstance = function()
+    return true
+  end
+  check("instances gate aura reads", xp.missingParts("xp")[1] == "Aura scan unavailable in instances")
+  check("rep bonuses narrow to rep buffs", xp.bonusParts("rep", true)[1] == "Bonus rep gain")
+  _G.C_PvP, _G.C_UnitAuras, _G.IsInInstance, _G.GetXPExhaustion = nil, nil, nil, nil
+end
+
+-- XP slash and toggle: every subcommand sounds and says, typos help
+do
+  xpWorld()
+  local ns = loadXP()
+  ns.db = {}
+  ns.modules.InitAll()
+  local xp, said, played = ns.xp, {}, {}
+  ns.say = function(msg)
+    said[#said + 1] = msg
+  end
+  ns.play = function(kind)
+    played[#played + 1] = kind
+  end
+  _G.SlashCmdList.VOCUI("xp off")
+  check("slash turns the module off with sound", xp.opts().enabled == false and played[#played] == "off")
+  _G.SlashCmdList.VOCUI("xp on")
+  check("slash turns the module on with sound", xp.opts().enabled == true and played[#played] == "on")
+  _G.SlashCmdList.VOCUI("xp lock")
+  check("slash locks the bar", xp.opts().locked == true and said[#said] == "locked")
+  _G.SlashCmdList.VOCUI("xp pause")
+  check("slash pauses tracking", said[#said] == "paused")
+  _G.SlashCmdList.VOCUI("xp pause")
+  check("slash resumes tracking", said[#said] == "resumed")
+  _G.SlashCmdList.VOCUI("xp reset")
+  check("slash restarts the session", said[#said] == "session reset")
+  _G.SlashCmdList.VOCUI("xp rep")
+  check("slash toggles reputation", xp.opts().repMode == false and said[#said] == "reputation tracking off")
+  local before = #played
+  _G.SlashCmdList.VOCUI("xp bogus")
+  check("unknown xp subcommand only prints help", xp.opts().enabled == true and #played == before)
+  _G.SlashCmdList.VOCUI("xp")
+  check("bare xp toggles the bar", xp.opts().enabled == false)
+end
+
+-- XP panel: a subcategory under VocUI, Forever rows only, live callbacks
+do
+  xpWorld()
+  local registered, subcats = {}, {}
+  local headers = {}
+  _G.Settings = {
+    RegisterVerticalLayoutCategory = function(n)
+      return {
+        name = n,
+        GetID = function()
+          return 7
+        end,
+      }
+    end,
+    RegisterVerticalLayoutSubcategory = function(parent, n)
+      local sub = { name = n, parent = parent }
+      subcats[#subcats + 1] = sub
+      return sub
+    end,
+    RegisterAddOnCategory = function() end,
+    OpenToCategory = function() end,
+    RegisterAddOnSetting = function(page, variable, key, tbl, vtype, label, default)
+      local s = { page = page, variable = variable, key = key }
+      s.SetValueChangedCallback = function(_, fn)
+        s.callback = fn
+      end
+      registered[#registered + 1] = s
+      return s
+    end,
+    CreateCheckbox = function()
+      return {}
+    end,
+  }
+  _G.SettingsPanel = {
+    GetLayout = function()
+      return {
+        AddInitializer = function(_, init)
+          headers[#headers + 1] = init
+        end,
+      }
+    end,
+  }
+  _G.CreateSettingsListSectionHeaderInitializer = function(text)
+    return text
+  end
+  local ns = loadXP()
+  ns.db = {}
+  ns.modules.InitAll()
+  ns.settings.Init()
+  local xp = ns.xp
+  check("xp page is a subcategory under VocUI", #subcats == 1 and subcats[1].name == "XP")
+  check("panel rows bind to the subcategory", registered[1].page == subcats[1])
+  local keys = {}
+  for _, s in ipairs(registered) do
+    keys[#keys + 1] = s.key
+  end
+  check(
+    "panel registers the rows in order",
+    table.concat(keys, ",") == "enabled,announce,hideDefault,repMode,followLatest,locked"
+  )
+  check(
+    "panel leads with the job and the window",
+    headers[1] == xp.descriptor.job and headers[2] == "Rate window: trailing 10 minutes, forecast 15"
+  )
+  local enabledSetting
+  for _, s in ipairs(registered) do
+    if s.key == "enabled" then
+      enabledSetting = s
+    end
+  end
+  ns.db.modules.xp.enabled = false
+  enabledSetting.callback("enabled")
+  check("panel toggle applies live", xp.frame.events.PLAYER_XP_UPDATE == nil)
+  _G.Settings, _G.SettingsPanel, _G.CreateSettingsListSectionHeaderInitializer = nil, nil, nil
+end
+
+-- XP modes: entering the world seats the bar, cap pivots to rep
+do
+  xpWorld()
+  local ns = loadXP()
+  ns.db = {}
+  local said = {}
+  ns.say = function(msg)
+    said[#said + 1] = msg
+  end
+  ns.play = function() end
+  ns.modules.InitAll()
+  local xp = ns.xp
+  check("init listens for the world", xp.frame.events.PLAYER_ENTERING_WORLD ~= nil)
+  xp.frame.scripts.OnEvent(xp.frame, "PLAYER_ENTERING_WORLD")
+  check("entering seats the bar", xp.frame.points ~= nil and xp.frame.shown == true)
+  check("first sighting teaches the default bar", said[1] == nil or said[1]:find("default XP bar", 1, true) ~= nil)
+  check("unavailable tracker stays untracked", xp.repTracked() == nil)
+  xp.SetEnabled(false)
+  check("toggle off unregisters and hides", xp.frame.events.PLAYER_XP_UPDATE == nil and xp.frame.shown == false)
+  xp.SetEnabled(true)
+  check("toggle on restores the bar", xp.frame.events.PLAYER_XP_UPDATE ~= nil)
+end
+
+-- XP at cap: reputation takes the bar, latest gains resolve
+do
+  xpWorld()
+  _G.GetMaxPlayerLevel = function()
+    return 10
+  end
+  _G.C_Reputation = {
+    GetWatchedFactionData = function()
+      return {
+        factionID = 7,
+        name = "G",
+        reaction = 5,
+        currentReactionThreshold = 0,
+        nextReactionThreshold = 6000,
+        currentStanding = 3000,
+      }
+    end,
+    GetFactionDataByID = function()
+      return {
+        factionID = 7,
+        name = "G",
+        reaction = 5,
+        currentReactionThreshold = 0,
+        nextReactionThreshold = 6000,
+        currentStanding = 3000,
+      }
+    end,
+    IsFactionParagonForCurrentPlayer = function()
+      return false
+    end,
+    IsMajorFaction = function()
+      return false
+    end,
+  }
+  local ns = loadXP()
+  ns.db = {}
+  ns.say = function() end
+  ns.play = function() end
+  ns.modules.InitAll()
+  local xp = ns.xp
+  xp.frame.scripts.OnEvent(xp.frame, "PLAYER_ENTERING_WORLD")
+  check("cap pivots to the watched faction", xp.repTracked() == 7)
+  check("rep mode watches the event set", xp.frame.events.UPDATE_FACTION ~= nil)
+  _G.GetMaxPlayerLevel, _G.C_Reputation = nil, nil
+end
+
+-- XP tooltip: gold title, rate lines, bonuses, slash hint, drag guard
+do
+  xpWorld()
+  local ns = loadXP()
+  local xp = ns.xp
+  local tip = { lines = {} }
+  _G.GameTooltip = {
+    SetOwner = function() end,
+    ClearLines = function()
+      tip.lines = {}
+    end,
+    SetText = function(_, t, r, g)
+      tip.title = t
+      tip.color = { r, g }
+    end,
+    AddLine = function(_, t)
+      tip.lines[#tip.lines + 1] = t
+    end,
+    Show = function()
+      tip.shown = true
+    end,
+    Hide = function() end,
+  }
+  local seg = xp.barSegments({ level = 10, xp = 400, req = 1000, capped = false }, 200, 100)
+  local est = { status = "ready", xpPerHour = 144000, etaSeconds = 1500, windowSeconds = 600 }
+  xp.showTip(est, seg, 1, "xp")
+  check("tooltip titles the module in gold", tip.title == "XP" and tip.color[1] == 1 and tip.color[2] == 0.82)
+  check(
+    "tooltip carries reach and hint",
+    tip.lines[3] == "Rested: 20% of level"
+      and tip.lines[4] == "1 quest ready: 10% of level"
+      and tip.lines[#tip.lines]:find("/vui help", 1, true) ~= nil
+  )
+  xp.dragging = true
+  tip.lines = {}
+  xp.showTip(est, seg, 1, "xp")
+  check("tooltip never fires mid-drag", #tip.lines == 0)
+  xp.dragging = false
+  _G.GameTooltip = nil
+end
+
+-- XP rivals: guests warn once, and only when announced
+do
+  xpWorld()
+  _G.C_AddOns = {
+    IsAddOnLoaded = function(addon)
+      return addon == "Dominos"
+    end,
+  }
+  local ns = loadXP()
+  ns.db = {}
+  local said = {}
+  ns.say = function(msg)
+    said[#said + 1] = msg
+  end
+  ns.play = function() end
+  ns.modules.InitAll()
+  local xp = ns.xp
+  local warned = xp.checkRivals()
+  check("a loaded rival warns once", warned == true and said[1]:find("Dominos", 1, true) ~= nil)
+  check("the warning never repeats", xp.checkRivals() == false and #said == 1)
+  _G.C_AddOns = nil
+end
+
 print(string.format("%d passed, %d failed", pass, fail))
 os.exit(fail > 0 and 1 or 0)

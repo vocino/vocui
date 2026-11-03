@@ -11,6 +11,8 @@ ns.COLORS = {
   muted = { 0.5, 0.5, 0.5 }, -- hints, secondary text
   red = { 0.9, 0.3, 0.25 }, -- warnings only, never decoration
   green = { 0.25, 0.9, 0.35 }, -- valid state only
+  rest = { 0.3, 0.6, 1 }, -- rested reach: clear blue over the purple fill
+  quest = { 1, 0.7, 0.15 }, -- banked quest XP: deeper gold, darker than the title face
 }
 
 -- r, g, b (and alpha when given) for a token, so a SetTextColor or

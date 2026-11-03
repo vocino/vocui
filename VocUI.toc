@@ -28,3 +28,10 @@ modules/gear/Evaluate.lua
 modules/gear/Panel.lua
 modules/gear/Scan.lua
 modules/gear/Sheet.lua
+modules/xp/XP.lua
+modules/xp/Bar.lua
+modules/xp/Bonuses.lua
+modules/xp/Modes.lua
+modules/xp/Panel.lua
+modules/xp/Rate.lua
+modules/xp/Rep.lua
