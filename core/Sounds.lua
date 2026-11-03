@@ -17,3 +17,17 @@ function ns.play(kind)
   local id = type(SOUNDKIT) == "table" and SOUNDKIT[s[1]] or nil
   pcall(PlaySound, type(id) == "number" and id or s[2])
 end
+
+-- Numeric IDs through the same route: a module with a sound of its
+-- own (a configured equip chime) plays it here, never with PlaySound
+-- directly, so a missing sound API stays silent instead of erroring.
+function ns.playID(id)
+  local num = tonumber(id)
+  if not num or num == 0 then
+    return
+  end
+  if type(PlaySound) ~= "function" then
+    return
+  end
+  pcall(PlaySound, num)
+end

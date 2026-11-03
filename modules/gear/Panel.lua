@@ -16,6 +16,9 @@ local function rowChanged(key)
     if gear.ApplyEnabledImpl then
       gear.ApplyEnabledImpl()
     end
+    if gear.EnsureSheetImpl then
+      gear.EnsureSheetImpl()
+    end
     gear.Scan()
   elseif key == "equipSound" then
     gear.playEquipSound()

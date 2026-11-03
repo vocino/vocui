@@ -94,6 +94,27 @@ do
   check("unknown kind never errors", pcall(ns.play, "bogus") == true)
 end
 
+-- Sounds.lua: numeric IDs play through the same helper route
+do
+  local ns = loadCore()
+  check("playID helper exists", type(ns.playID) == "function")
+  if type(ns.playID) == "function" then
+    local sounded = {}
+    _G.PlaySound = function(id)
+      sounded[#sounded + 1] = id
+    end
+    _G.SOUNDKIT = nil
+    ns.playID(878)
+    ns.playID("0")
+    ns.playID("bogus")
+    ns.playID(nil)
+    check("playID plays numeric ids only", #sounded == 1 and sounded[1] == 878)
+    _G.PlaySound = nil
+    check("playID without an API is silent", pcall(ns.playID, 878) == true)
+    _G.SOUNDKIT = nil
+  end
+end
+
 -- Config.lua: per-module sections, defaults fill once, Set broadcasts
 do
   local ns = loadCore()
@@ -1064,6 +1085,88 @@ do
   end
   check("why lines carry auction value", valued)
   _G.Auctionator = nil
+end
+
+-- Gear: the equip sound resolves SOUNDKIT names first, numeric behind
+do
+  gearWorld()
+  local ns = loadGear()
+  ns.db = {}
+  local gear = ns.gear
+  local played = {}
+  _G.PlaySound = function(id)
+    played[#played + 1] = id
+  end
+  _G.SOUNDKIT = { IG_QUEST_LIST_COMPLETE = 9999 }
+  gear.opts().equipSound = "878"
+  gear.playEquipSound()
+  check("equip sound prefers the SOUNDKIT name", played[1] == 9999)
+  _G.SOUNDKIT = nil
+  gear.playEquipSound()
+  check("equip sound falls back to the numeric id", played[2] == 878)
+  gear.opts().equipSound = "0"
+  gear.playEquipSound()
+  check("equip sound off is silent", #played == 2)
+  _G.PlaySound = nil
+  check("equip sound without an API is silent", pcall(gear.playEquipSound) == true)
+  _G.SOUNDKIT = nil
+end
+
+-- Gear sheet: the button honors the module toggle, and its tooltip
+-- warns when equips cannot run right now
+do
+  local w = gearWorld()
+  local ns = loadGear()
+  ns.db = {}
+  ns.modules.InitAll()
+  local gear = ns.gear
+  ns.say = function() end
+  ns.play = function() end
+  gear.EnsureSheetImpl()
+  check("check bags shows while gear is on", gear.sheetButton ~= nil and gear.sheetButton.shown == true)
+  gear.SetEnabled(false)
+  check("disabling gear hides check bags", gear.sheetButton.shown == false)
+  gear.SetEnabled(true)
+  check("re-enabling gear shows check bags", gear.sheetButton.shown == true)
+  local tip = { lines = {} }
+  _G.GameTooltip = {
+    SetOwner = function() end,
+    SetText = function(_, t, r, g)
+      tip.title = t
+      tip.color = { r, g }
+    end,
+    AddLine = function(_, t, r)
+      tip.lines[#tip.lines + 1] = { text = t, red = (r == 0.9) }
+    end,
+    Show = function()
+      tip.shown = true
+    end,
+    Hide = function() end,
+  }
+  w.combat = false
+  gear.sheetButton.scripts.OnEnter(gear.sheetButton)
+  local calm = true
+  for _, line in ipairs(tip.lines) do
+    if line.red then
+      calm = false
+    end
+  end
+  check(
+    "sheet tooltip names check bags in gold",
+    tip.title == "Check Bags" and tip.color[1] == 1 and tip.color[2] == 0.82
+  )
+  check("sheet tooltip stays quiet out of combat", calm == true)
+  w.combat = true
+  tip.lines = {}
+  gear.sheetButton.scripts.OnEnter(gear.sheetButton)
+  local warned = false
+  for _, line in ipairs(tip.lines) do
+    if line.red and line.text:find("combat", 1, true) then
+      warned = true
+    end
+  end
+  check("sheet tooltip warns in combat", warned == true)
+  _G.GameTooltip = nil
 end
 
 print(string.format("%d passed, %d failed", pass, fail))

@@ -35,24 +35,31 @@ end
 
 -- Equip celebration sounds. IDs verified on the Forever branch
 -- (Blizzard_SharedXML/Mainline/SoundKitConstants.lua): the client's own
--- UI chimes, played with PlaySound so they honor the player's volume.
+-- UI chimes, played through the core helper so they honor the player's volume.
 gear.EQUIP_SOUNDS = {
-  { id = "878", label = "Quest chime" }, -- IG_QUEST_LIST_COMPLETE
-  { id = "23404", label = "Auto quest complete" }, -- UI_AUTO_QUEST_COMPLETE
-  { id = "73277", label = "World quest complete" }, -- UI_WORLDQUEST_COMPLETE
+  { id = "878", key = "IG_QUEST_LIST_COMPLETE", label = "Quest chime" },
+  { id = "23404", key = "UI_AUTO_QUEST_COMPLETE", label = "Auto quest complete" },
+  { id = "73277", key = "UI_WORLDQUEST_COMPLETE", label = "World quest complete" },
 }
 
 -- Play the configured equip sound through the core helper's route
--- (PlaySound, presence-gated). Silent when off or unavailable.
+-- (ns.playID, presence-gated). SOUNDKIT names first and the numeric
+-- IDs behind them, so a Blizzard rename never silences the polish.
+-- Silent when off or unavailable.
 function gear.playEquipSound()
   local id = tonumber(gear.opts().equipSound) or 0
   if id == 0 then
     return
   end
-  if type(PlaySound) ~= "function" then
-    return
+  local key
+  for _, snd in ipairs(gear.EQUIP_SOUNDS) do
+    if snd.id == tostring(id) then
+      key = snd.key
+      break
+    end
   end
-  pcall(PlaySound, id)
+  local named = type(SOUNDKIT) == "table" and type(key) == "string" and SOUNDKIT[key] or nil
+  ns.playID(type(named) == "number" and named or id)
 end
 
 -- Session-only state. None of this persists: displaced-gear memory,
@@ -151,6 +158,9 @@ function gear.SetEnabled(on)
   end
   if gear.ApplyEnabledImpl then
     gear.ApplyEnabledImpl()
+  end
+  if gear.EnsureSheetImpl then
+    gear.EnsureSheetImpl()
   end
   if on and gear.CheckNowImpl then
     gear.CheckNowImpl()

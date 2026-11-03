@@ -164,7 +164,7 @@ function gear.EnsureSheetImpl()
   gear.HookItemLevel() -- the sheet loads lazily
   local o = gear.opts()
   if gear.sheetButton then
-    gear.sheetButton:SetShown(o.sheetButton ~= false)
+    gear.sheetButton:SetShown(o.sheetButton ~= false and o.enabled ~= false)
     gear.PlaceSheetButton()
     return
   end
@@ -191,6 +191,9 @@ function gear.EnsureSheetImpl()
       COLORS.text[3],
       true
     )
+    if gear.InCombat() then
+      GameTooltip:AddLine("does not work in combat", COLORS.red[1], COLORS.red[2], COLORS.red[3], true)
+    end
     GameTooltip:Show()
   end)
   btn:SetScript("OnLeave", function()
@@ -198,7 +201,7 @@ function gear.EnsureSheetImpl()
       GameTooltip:Hide()
     end
   end)
-  btn:SetShown(o.sheetButton ~= false)
+  btn:SetShown(o.sheetButton ~= false and o.enabled ~= false)
   gear.sheetButton = btn
   gear.PlaceSheetButton()
 end

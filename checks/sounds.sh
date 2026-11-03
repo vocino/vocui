@@ -29,6 +29,21 @@ if ! grep -rqE --include='*.lua' --exclude-dir=.git --exclude-dir=tests --exclud
   fail=1
 fi
 
+# Nothing plays the sound API directly: every play goes through the
+# helper above, so a missing API stays silent instead of erroring.
+while IFS= read -r f; do
+  if [ "$f" = "$file" ]; then
+    continue
+  fi
+  hits="$(sed -E 's/--.*$//' "$f" | grep -nE 'PlaySound[[:space:]]*(\(|,)' || true)"
+  if [ -n "$hits" ]; then
+    echo "direct PlaySound call in $f:"
+    echo "$hits" | head -5
+    echo "play it through ns.play/ns.playID in $file instead"
+    fail=1
+  fi
+done < <(find "$dir" -name '*.lua' -not -path '*/.git/*' -not -path '*/tests/*' -not -path '*/.reference/*')
+
 if [ "$fail" -eq 1 ]; then
   echo "FAIL: add ns.SOUNDS and ns.play (FAMILY.md \"Sounds\")."
   exit 1
