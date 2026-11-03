@@ -11,7 +11,9 @@ ns.SOUNDS = {
 }
 function ns.play(kind)
   local s = ns.SOUNDS[kind]
-  if not s or type(PlaySound) ~= "function" then return end
+  if not s or type(PlaySound) ~= "function" then
+    return
+  end
   local id = type(SOUNDKIT) == "table" and SOUNDKIT[s[1]] or nil
   pcall(PlaySound, type(id) == "number" and id or s[2])
 end

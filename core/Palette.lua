@@ -6,10 +6,10 @@ local _, ns = ...
 -- emphasis, white for body, gray for secondary text, red and green
 -- for state only.
 ns.COLORS = {
-  gold = { 1, 0.82, 0 },       -- titles, emphasis, the one accent per screen
-  text = { 1, 1, 1 },          -- body
-  muted = { 0.5, 0.5, 0.5 },   -- hints, secondary text
-  red = { 0.9, 0.3, 0.25 },    -- warnings only, never decoration
+  gold = { 1, 0.82, 0 }, -- titles, emphasis, the one accent per screen
+  text = { 1, 1, 1 }, -- body
+  muted = { 0.5, 0.5, 0.5 }, -- hints, secondary text
+  red = { 0.9, 0.3, 0.25 }, -- warnings only, never decoration
   green = { 0.25, 0.9, 0.35 }, -- valid state only
 }
 

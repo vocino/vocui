@@ -14,10 +14,34 @@ end
 function mock.install()
   _G.SlashCmdList = _G.SlashCmdList or {}
   _G.CreateFrame = function()
-    local frame = { events = {}, scripts = {} }
-    function frame:RegisterEvent(event) self.events[event] = true end
-    function frame:UnregisterEvent(event) self.events[event] = nil end
-    function frame:SetScript(script, fn) self.scripts[script] = fn end
+    local frame = { events = {}, scripts = {}, shown = true }
+    function frame:RegisterEvent(event)
+      self.events[event] = true
+    end
+    function frame:UnregisterEvent(event)
+      self.events[event] = nil
+    end
+    function frame:SetScript(script, fn)
+      self.scripts[script] = fn
+    end
+    function frame:SetText(text)
+      self.text = text
+    end
+    function frame:SetSize(width, height)
+      self.width, self.height = width, height
+    end
+    function frame:SetShown(shown)
+      self.shown = shown
+    end
+    function frame:ClearAllPoints()
+      self.points = {}
+    end
+    function frame:SetPoint(...)
+      self.points = { ... }
+    end
+    function frame:GetPoint()
+      return nil
+    end
     mock.frames[#mock.frames + 1] = frame
     return frame
   end

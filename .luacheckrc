@@ -20,11 +20,19 @@ globals = {
 -- WoW API and UI globals read by the core. Every entry is
 -- presence-gated at the call site; a missing API is never an error.
 read_globals = {
+  "Auctionator", "Syndicator", -- third-party guests, presence-gated at every call
+  "C_AddOns", "C_Container", "C_Item", "C_PaperDollInfo", "C_PetBattles",
+  "C_SpecializationInfo", "C_Timer",
   "CreateFrame",
   "CreateSettingsListSectionHeaderInitializer",
   "GameTooltip",
+  "GetAverageItemLevel", "GetInventoryItemLink", "GetTime",
+  "InCombatLockdown", "NUM_BAG_SLOTS",
+  "PaperDollFrame", "PaperDollFrame_SetItemLevel",
   "PlaySound", "SOUNDKIT",
   "Settings", "SettingsPanel",
+  "UnitAffectingCombat", "UnitClass", "UnitIsDeadOrGhost", "UnitLevel",
+  "hooksecurefunc",
 }
 
 -- Tests install stubs onto _G by design.

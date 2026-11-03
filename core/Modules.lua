@@ -10,8 +10,9 @@ ns.modules = modules
 --               in the current situation stays hidden, never broken.
 --               Name it for the flavor (IsAvailableBank), with a
 --               comment giving the reason.
---   BuildPanel  optional Settings section builder; the core hands it
---               the package category and it adds its own controls.
+--   BuildPanel  optional Settings page builder; the core hands it the
+--               module's own subcategory page under the package category.
+--   Slash       optional subcommand handler for "/vui <name> ...".
 -- Registering never errors: an invalid descriptor waits for InitAll
 -- and is reported there, so one broken module file can never break
 -- the package load.
@@ -39,13 +40,17 @@ end
 -- call; the registry itself stays private.
 function modules.GetAll()
   local all = {}
-  for i, mod in ipairs(registry) do all[i] = mod end
+  for i, mod in ipairs(registry) do
+    all[i] = mod
+  end
   return all
 end
 
 local function initOne(mod)
   local ok, err = pcall(mod.init)
-  if not ok then ns.say(mod.name .. " failed to load: " .. tostring(err)) end
+  if not ok then
+    ns.say(mod.name .. " failed to load: " .. tostring(err))
+  end
 end
 
 -- Initialize every module inside its own protected call, skipping the

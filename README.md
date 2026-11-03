@@ -10,11 +10,13 @@ a session surfaces a need, a module gets built for it, and the package
 he logs into next week is a little more his than the one from the week
 before. This repository is that running record.
 
-This README is the constitution. It defines the principles the code will
-follow before any feature code exists, and it keeps defining them as the
-package grows. Features come later, one module at a time, and every
-module has to name the principles it serves. A feature that cannot name
-one does not ship.
+The constitution lives in the wiki ([Principles](https://github.com/vocino/vocui/wiki/Principles)).
+It defines the principles the code follows before any feature code
+exists, and it keeps defining them as the package grows. Features come
+later, one module at a time, and every module has to name the
+principles it serves. A feature that cannot name one does not ship.
+This README keeps the player profile and the package status; the
+[Charter](#charter) section below points at the wiki for everything else.
 
 ## If you are not me
 
@@ -64,246 +66,41 @@ The design target, stated plainly so modules can be judged against it:
 - Attention is the scarce resource. Anything the package shows has to
   earn its place in a glance, during play, without a manual.
 
-## Product principles
+## Charter
 
-1. **Audience of one.** Every decision resolves to one question: does
-   this serve how this player plays? "Other players might want" is
-   never a reason to build, keep, or complicate anything.
-2. **Forever only.** Design against Forever's actual systems: its
-   classes, camping, the Legacy system, dual specialization at 40, its
-   professions and its economy. Never import a retail assumption.
-   Retail features that do not exist here stay absent, and Forever
-   features with no retail analogue get designs of their own.
-3. **Follow the current game.** The roadmap is whatever the player is
-   doing this season. When his goals move from leveling to endgame, the
-   modules follow. Nothing is built ahead of the habit it serves.
-4. **Answers first, attention last.** Screens and readouts order
-   information the family way: the answer first, supporting context
-   second, actions third, configuration last. Nothing acts in combat,
-   nothing spams at login, nothing pops up uninvited.
-5. **Beside the second screen, not instead of it.** Planning lives on
-   wow.vocino.com. VocUI handles the decisions that happen at the
-   keyboard, in the moment, and stays out of the planning surface's
-   way. The two never duplicate each other.
-6. **Automate the reversible, confirm the irreversible.** Equipping,
-   sorting, and reporting may run on their own and announce themselves.
-   Destroying, selling, mailing, or spending always asks first.
-7. **Guests, not dependencies.** The player's other addons (guide,
-   bags, waypoint, and the four Voc family addons) are welcome and
-   integrated with softly when present. VocUI requires none of them and
-   degrades silently when any of them is absent or broken.
-8. **Modules earn their place in play.** A module that stops being
-   used gets removed, and the removal is recorded here with its reason.
-   Scope discipline applies to the whole package, not only to code.
-
-## Architecture principles
-
-9. **A small core, many modules.** The core does five things only:
-   load modules, hold settings, provide the shared palette and sounds,
-   route the slash command, and print chat. Everything a player would
-   recognize as a feature is a module.
-10. **Modules are self-contained.** A module is a folder with a small
-    descriptor (name, job in one sentence, toggle, validity check), its
-    own files, and its own section of the settings store. It registers
-    itself; the core never reaches inside it.
-11. **Modules meet only at the core.** No module calls another module.
-    Shared needs become core services or stay duplicated in the small.
-    Deleting a module means deleting its folder and its descriptor
-    line; nothing else references it.
-12. **One broken module never breaks the package.** Modules initialize
-    inside protected calls. A module that cannot work in the current
-    situation is never initialized and never listed: unavailable is a
-    designed state, hidden rather than shown broken. Each validity
-    check is a named predicate with a comment giving its reason.
-13. **Boring Lua.** Local by default, state on the namespace, never on
-    globals the prefix does not own. File top levels define; they do
-    not act. Updates are event-driven; nothing polls and nothing ticks
-    to re-read state. The cleanest module is the one a maintainer can
-    understand in one pass.
-14. **Settings are data, applied live.** Options are declarative
-    tables. A central store broadcasts changes; modules subscribe.
-    Changing a setting takes effect immediately, with no reload. The
-    settings live in one tree (principle 24): a single parent category
-    for the package, one page per module under it.
-15. **Defaults are the product.** Because there is one player, defaults
-    carry the design. A module ships already set up the way he plays;
-    settings exist mainly to turn modules off, not to configure them
-    into usefulness. If a module needs explaining, simplify the module.
-
-## Craft principles
-
-16. **The family look and feel.** VocUI inherits the Voc family's craft
-    whole: the palette defined once and referenced by name, Blizzard
-    panels and font objects, a sound confirming every meaningful
-    interaction, the family chat voice (one line, a fact or a next
-    step, no trailing period). The paradigms live in this repo, in
-    CRAFT.md, and they are this repo's own: they were distilled from
-    the Voc family's craft at the start, and they evolve here, in
-    this file, from what ships in this package.
-17. **Stock first.** Default chrome is Blizzard's own, so the package
-    looks native beside the game's windows. Custom visuals are spent
-    only where the game's own cannot say the thing.
-18. **Designed for the next developer.** Modules are documented at the
-    descriptor, public functions say what they do, and the layout below
-    stays accurate. The next developer is usually the same player and
-    an agent with this README open; both should be able to extend a
-    module without reading anyone's mind.
-
-## Engineering principles
-
-19. **Verify the API on the Forever branch.** Code targets the build
-    in the Forever client's `## Interface:`. Every API fact is checked
-    against Blizzard's own documentation and UI source for that build
-    (the `forever` branch of the UI source mirror), in the order
-    `docs/api.md` prescribes, and the verdict is recorded in
-    `docs/api-ledger.md`. Wikis and memory are leads to confirm,
-    never sources. Every global the code reads is listed in the lint
-    allowlist, added only after verification. And the check runs
-    before coding starts, not after something breaks: the build this
-    repo targets is confirmed current against the mirror at the start
-    of every coding session (`tools/check-build.sh`), and a moved
-    build triggers the re-verification pass before any feature code.
-20. **Headless tests, always green.** Module logic lives behind
-    functions that stubbed WoW APIs can drive. No release ships with a
-    failing test, a lint error, or a type error.
-21. **Debug with the community's tools.** !BugGrabber captures errors
-    and BugSack shows them in game; the development loop reads the
-    saved error file directly after a reproduction and a `/reload`.
-22. **Releases are tags.** Versioning is semantic and tag-driven, and
-    commit subjects are the changelog: `feat:`, `fix:`, `docs:`,
-    `chore:`, written so the player can read what changed and why.
-
-## Cohesion principles
-
-23. **One package, one system.** The modules are not separate addons
-    sharing a folder. They are one product: one install, one update,
-    one entry point, one settings home, one visual and sound language.
-    The test is feel: using two modules back to back, the player
-    cannot tell where one ends and the other begins. Integration is
-    the reason this package exists; the family is where independence
-    lives.
-24. **The settings tree is the map of the package.** The core
-    registers one parent category, VocUI, in the game's addon
-    settings. Every module owns one page under it, a subcategory named
-    for its job, holding only that module's options, in the tree the
-    player expands to browse what the package does. A module never
-    registers a top-level category of its own, and a module with
-    nothing to configure still gets a page: its toggle, and one line
-    saying what it does.
-25. **Adding a module is a procedure, not an improvisation.** The
-    steps live in AGENTS.md and are followed exactly, in order, every
-    time: folder, descriptor, toc lines, settings page, tests, status
-    line. When a module needs a shape the procedure does not cover,
-    the procedure grows in the same commit, so the second module of
-    that kind is never improvised either.
-
-## The module contract
-
-Every module takes the same shape, so the system stays one system as
-it grows:
-
-- **Folder:** `modules/<job>/`, named for the job in lower case. The
-  descriptor file loads first; the rest of the module follows it.
-- **Descriptor:** a small table naming the module: its id (the folder
-  name), its title, its job in one sentence, whether it defaults on
-  or off, its validity predicate, and its init function. The core
-  loads modules from their descriptors and from nothing else.
-- **State:** a module reads and writes only its own section of the
-  saved variables, `VocUIDB.modules.<id>`. It touches no other
-  module's state and keeps no state anywhere else.
-- **Settings:** the module asks the core for its page in the settings
-  tree (principle 24) and fills it with declarative option rows. The
-  core owns the parent category and the store; the module owns its
-  rows.
-- **Load order:** core files first in `VocUI.toc`, then modules in
-  alphabetical order by folder. A module's init runs inside a
-  protected call from the core loader (principle 12).
-- **Neighbors:** a module may react to core broadcasts (a setting
-  changed, the player entered the world) and may call core services.
-  It never calls another module (principle 11). Two modules that need
-  the same fact get it from the core or compute it in the small, each
-  for itself.
-
-The worked example to hold in mind: the gear system from VocGear,
-auto-equipping upgrades, belongs here one day as the gear module,
-same job, same behavior, rebuilt under this contract so it sits in
-the tree beside everything else.
-
-## Deliberate breaks from the Voc family
-
-VocUI is a sibling of the four family addons, not a fifth member, and
-it breaks two family rules on purpose:
-
-- **One job per addon** becomes one job per module. The family stays
-  tiny and independent; this package is where integration is allowed
-  to live, and the modularity principles above are what keep that from
-  becoming a tangle.
-- **Every version of the game** becomes Forever only (principle 2).
-  The family keeps shipping dual clients; VocUI spends all of its
-  effort on the one client its player is playing.
-
-Everything else the family holds (naming, slash grammar, chat voice,
-sounds, palette, settings mechanics) was brought into this repo when
-it was set up, so the repo stands on its own: CRAFT.md carries the
-look and feel, `docs/coding.md` carries the mechanics, `docs/api.md`
-and `docs/api-ledger.md` carry the API discipline, and `checks/`
-carries the enforcement. Nothing outside this repo is consulted to
-build it. The family and this package evolve separately from here;
-where they later disagree, each is right in its own house.
-
-The graduation path runs the other way: when a module proves useful
-enough to stand alone for other players, it graduates into a family
-addon of its own, with its own repo, and leaves VocUI behind.
-
-The absorption path runs this way: when the player wants a family
-addon's job inside the one system, the job is re-implemented as a
-module under the contract above. The family original stays
-independent and unchanged; the module is a sibling implementation
-for one player's package, not a replacement.
-
-## Repository layout
-
-```
-VocUI/
-  VocUI.toc           Forever client metadata (Interface 16001)
-  core/               loader, settings store, palette, sounds, chat, slash
-  modules/            one folder per module, descriptor first
-  tests/              headless tests for core and modules
-  README.md           this file, the constitution
-  CRAFT.md            the style paradigms every module follows
-  docs/               coding.md, api.md, api-ledger.md, debugging.md
-  checks/             the mechanical checks (bash checks/run-all.sh .)
-  tools/              check-build.sh, the build-currency gate
-  AGENTS.md           contributor map for agents
-  LICENSE             MIT
-```
-
-Naming follows the family: the package is `VocUI`, its saved variables
-are `VocUIDB`, its slash commands are `/vui` and `/vocui`, and every
-global it owns carries the `VocUI` prefix. Module folders are named for
-their job in lower case.
-
-## How this document evolves
-
-Principles are numbered and never renumbered. A principle changes by
-editing this file in the same commit as the work that motivates the
-change, with the reason in the commit. A retired principle is marked
-retired, with the date and the lesson, not deleted: the paper trail is
-part of the design. When a principle and the code disagree, the code is
-wrong until this file says otherwise.
+The 25 principles, the module contract, absorption and graduation,
+repository layout, and how the charter evolves live in the wiki:
+[Principles](https://github.com/vocino/vocui/wiki/Principles) (local
+copy: wiki/Principles.md). API in
+[API-Verification](https://github.com/vocino/vocui/wiki/API-Verification),
+style in [Craft](https://github.com/vocino/vocui/wiki/Craft) and
+[Coding](https://github.com/vocino/vocui/wiki/Coding), core decisions in
+[Principles](https://github.com/vocino/vocui/wiki/Principles), the gear module in
+[Modules-Gear](https://github.com/vocino/vocui/wiki/Modules-Gear). This README
+keeps the player's profile and the package status; for everything
+else, the wiki is the single source.
 
 ## Status
 
 Principles first, on purpose. The core scaffolding is in place (loader,
 settings store, palette, sounds, chat, slash, and the headless test
-harness), and there are no modules yet. From here the package grows the
-way it was designed to: a module at a time, added while playing, each
+harness). Modules so far:
+- **Gear** (`modules/gear/`): equips bag upgrades out of combat by
+  item level, with its own page under Settings > AddOns > VocUI and
+  `/vui gear` subcommands. The Forever half of VocGear; the Pawn and
+  Great Vault halves stayed behind in VocGear, which is unchanged.
+  Bag contents come from Syndicator when it is present and settled
+  (else Blizzard's own bag walk), and item values from Auctionator
+  with a vendor fallback; both are guests, never requirements.
+
+From here the package grows the way it was designed to: a module at
+a time, added while playing, each
 one recorded here when it lands.
 
 ---
 
 Built for Forever, for one player, by vocino. The four family addons
-stay independent: [VocWarbank](https://github.com/vocino/vocwarbank) ·
-[VocGear](https://github.com/vocino/vocgear) ·
-[VocXP](https://github.com/vocino/vocxp) ·
+stay independent: [VocWarbank](https://github.com/vocino/vocwarbank) ??
+[VocGear](https://github.com/vocino/vocgear) ??
+[VocXP](https://github.com/vocino/vocxp) ??
 [VocVendor](https://github.com/vocino/vocvendor)

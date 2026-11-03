@@ -14,21 +14,46 @@ ns.HELP = {
 
 function ns.help()
   ns.say("commands")
-  for _, line in ipairs(ns.HELP) do print("  " .. line) end
+  for _, line in ipairs(ns.HELP) do
+    print("  " .. line)
+  end
+end
+
+local function findModule(cmd)
+  if not (ns.modules and type(ns.modules.GetAll) == "function") then
+    return nil
+  end
+  for _, mod in ipairs(ns.modules.GetAll()) do
+    if mod.name == cmd then
+      return mod
+    end
+  end
+  return nil
 end
 
 function slash.run(msg)
-  local cmd = ((msg or ""):match("^(%S*)") or ""):lower()
+  local text = (msg or ""):lower()
+  local cmd = text:match("^(%S*)") or ""
   if cmd == "" or cmd == "config" then
     ns.play("open")
     ns.settings.Open()
-  else
-    ns.help()
+    return
   end
+  -- Module subcommands: "/vui <module> ..." delegates to the module,
+  -- which owns its grammar under its name and never acts on a typo.
+  local mod = findModule(cmd)
+  if mod and type(mod.Slash) == "function" then
+    local rest = text:match("^%S+%s+(.*)$") or ""
+    mod.Slash(rest)
+    return
+  end
+  ns.help()
 end
 
 -- Blizzard's slash dispatcher reads SLASH_* globals by name, so these
 -- cannot be namespaced (they are declared in .luacheckrc instead).
 SLASH_VOCUI1 = "/vui"
 SLASH_VOCUI2 = "/vocui"
-SlashCmdList.VOCUI = function(msg) slash.run(msg) end
+SlashCmdList.VOCUI = function(msg)
+  slash.run(msg)
+end
