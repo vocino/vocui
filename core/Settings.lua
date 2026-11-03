@@ -36,6 +36,65 @@ local function note(text)
   settings.AddNote(category, text)
 end
 
+-- Declarative option rows, rendered through the native Settings
+-- controls (Principles #1: settings are data, never hand-built frames
+-- per option). A module hands its OPTIONS table; the core registers
+-- each row, wires the value-changed callback so a change applies at
+-- once with no reload, and gates child rows on the enable toggle
+-- (disabled, never hidden). Dropdown rows carry their options
+-- function. Returns how many rows were built.
+function settings.BuildPage(page, tag, state, defaults, rows, isEnabled, onChange)
+  if type(page) ~= "table" then
+    return 0
+  end
+  if type(state) ~= "table" or type(defaults) ~= "table" then
+    return 0
+  end
+  if type(rows) ~= "table" then
+    return 0
+  end
+  local built = 0
+  local parentInit = nil
+  for _, row in ipairs(rows) do
+    if type(row) == "table" and type(row.key) == "string" then
+      local setting = Settings.RegisterAddOnSetting(
+        page,
+        tag .. row.key,
+        row.key,
+        state,
+        type(defaults[row.key]),
+        row.label,
+        defaults[row.key]
+      )
+      local initializer
+      if row.kind == "dropdown" and type(row.options) == "function" then
+        initializer = Settings.CreateDropdown(page, setting, row.options, row.tooltip)
+      else
+        initializer = Settings.CreateCheckbox(page, setting, row.tooltip)
+      end
+      if setting and type(setting.SetValueChangedCallback) == "function" and type(onChange) == "function" then
+        local key = row.key
+        setting:SetValueChangedCallback(function()
+          onChange(key)
+        end)
+      end
+      if row.key == "enabled" then
+        parentInit = initializer
+      elseif
+        parentInit
+        and initializer
+        and type(initializer.SetParentInitializer) == "function"
+        and type(isEnabled) == "function"
+      then
+        -- Disabled, never hidden, while the module is off.
+        pcall(initializer.SetParentInitializer, initializer, parentInit, isEnabled)
+      end
+      built = built + 1
+    end
+  end
+  return built
+end
+
 -- The module's own page under the VocUI parent: a vertical-layout
 -- subcategory named for the module's job (wiki/Principles.md #24). When
 -- the subcategory API is missing the module builds on the parent page
