@@ -123,8 +123,8 @@ The design target, stated plainly so modules can be judged against it:
 14. **Settings are data, applied live.** Options are declarative
     tables. A central store broadcasts changes; modules subscribe.
     Changing a setting takes effect immediately, with no reload. The
-    settings panel is one native category for the whole package, and
-    each module contributes its own section to it.
+    settings live in one tree (principle 24): a single parent category
+    for the package, one page per module under it.
 15. **Defaults are the product.** Because there is one player, defaults
     carry the design. A module ships already set up the way he plays;
     settings exist mainly to turn modules off, not to configure them
@@ -167,6 +167,62 @@ The design target, stated plainly so modules can be judged against it:
     commit subjects are the changelog: `feat:`, `fix:`, `docs:`,
     `chore:`, written so the player can read what changed and why.
 
+## Cohesion principles
+
+23. **One package, one system.** The modules are not separate addons
+    sharing a folder. They are one product: one install, one update,
+    one entry point, one settings home, one visual and sound language.
+    The test is feel: using two modules back to back, the player
+    cannot tell where one ends and the other begins. Integration is
+    the reason this package exists; the family is where independence
+    lives.
+24. **The settings tree is the map of the package.** The core
+    registers one parent category, VocUI, in the game's addon
+    settings. Every module owns one page under it, a subcategory named
+    for its job, holding only that module's options, in the tree the
+    player expands to browse what the package does. A module never
+    registers a top-level category of its own, and a module with
+    nothing to configure still gets a page: its toggle, and one line
+    saying what it does.
+25. **Adding a module is a procedure, not an improvisation.** The
+    steps live in AGENTS.md and are followed exactly, in order, every
+    time: folder, descriptor, toc lines, settings page, tests, status
+    line. When a module needs a shape the procedure does not cover,
+    the procedure grows in the same commit, so the second module of
+    that kind is never improvised either.
+
+## The module contract
+
+Every module takes the same shape, so the system stays one system as
+it grows:
+
+- **Folder:** `modules/<job>/`, named for the job in lower case. The
+  descriptor file loads first; the rest of the module follows it.
+- **Descriptor:** a small table naming the module: its id (the folder
+  name), its title, its job in one sentence, whether it defaults on
+  or off, its validity predicate, and its init function. The core
+  loads modules from their descriptors and from nothing else.
+- **State:** a module reads and writes only its own section of the
+  saved variables, `VocUIDB.modules.<id>`. It touches no other
+  module's state and keeps no state anywhere else.
+- **Settings:** the module asks the core for its page in the settings
+  tree (principle 24) and fills it with declarative option rows. The
+  core owns the parent category and the store; the module owns its
+  rows.
+- **Load order:** core files first in `VocUI.toc`, then modules in
+  alphabetical order by folder. A module's init runs inside a
+  protected call from the core loader (principle 12).
+- **Neighbors:** a module may react to core broadcasts (a setting
+  changed, the player entered the world) and may call core services.
+  It never calls another module (principle 11). Two modules that need
+  the same fact get it from the core or compute it in the small, each
+  for itself.
+
+The worked example to hold in mind: the gear system from VocGear,
+auto-equipping upgrades, belongs here one day as the gear module,
+same job, same behavior, rebuilt under this contract so it sits in
+the tree beside everything else.
+
 ## Deliberate breaks from the Voc family
 
 VocUI is a sibling of the four family addons, not a fifth member, and
@@ -188,6 +244,12 @@ different.
 The graduation path runs the other way: when a module proves useful
 enough to stand alone for other players, it graduates into a family
 addon of its own, with its own repo, and leaves VocUI behind.
+
+The absorption path runs this way: when the player wants a family
+addon's job inside the one system, the job is re-implemented as a
+module under the contract above. The family original stays
+independent and unchanged; the module is a sibling implementation
+for one player's package, not a replacement.
 
 ## Repository layout
 
