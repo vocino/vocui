@@ -1,0 +1,6 @@
+# StyLua formatting for VocUI (Lua 5.1, the client's dialect).
+# Two-space indents and CRLF match the checked-in tree, so adopting
+# the formatter does not rewrite every line.
+indent_type = "Spaces"
+indent_width = 2
+line_endings = "Windows"
