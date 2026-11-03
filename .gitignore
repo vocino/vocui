@@ -10,3 +10,6 @@ Desktop.ini
 $RECYCLE.BIN/
 System Volume Information/
 .reference/
+# The vocui.wiki clone (vocino/vocui.wiki.git): the docs live there,
+# not here. Ignore the whole subfolder so the two repos never duplicate.
+wiki/
