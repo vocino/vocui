@@ -1,0 +1,11 @@
+# Stray Windows artifact from unexpanded %SystemDrive% env var
+# Covers D:\Code\vocui\%SystemDrive%\ProgramData\... cache spam
+\%SystemDrive%/
+%SystemDrive%/
+
+# Generic Windows spam
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+System Volume Information/
