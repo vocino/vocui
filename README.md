@@ -136,9 +136,10 @@ The design target, stated plainly so modules can be judged against it:
     whole: the palette defined once and referenced by name, Blizzard
     panels and font objects, a sound confirming every meaningful
     interaction, the family chat voice (one line, a fact or a next
-    step, no trailing period). The `voc-addons` skill is the source of
-    truth for that craft; when this file and the skill disagree about
-    look and feel, the skill wins.
+    step, no trailing period). The paradigms live in this repo, in
+    CRAFT.md, distilled from the `voc-addons` skill; the skill stays
+    upstream, so when CRAFT.md and the skill disagree about look and
+    feel, the skill wins and CRAFT.md is updated to match.
 17. **Stock first.** Default chrome is Blizzard's own, so the package
     looks native beside the game's windows. Custom visuals are spent
     only where the game's own cannot say the thing.

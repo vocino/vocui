@@ -6,6 +6,7 @@
 - `core/` - loader, settings store, palette, sounds, chat, slash
 - `modules/` - one folder per module, descriptor first (none yet)
 - `tests/` - headless tests (`lua tests/run.lua`)
+- `CRAFT.md` - the style paradigms: palette, type, panels, sounds, hover, anti-patterns
 
 ## Conventions
 
@@ -13,6 +14,7 @@
 - Place shared loader and services under `core/`.
 - Keep Forever client metadata in a `.toc` file.
 - Forever only: verify every API against the Forever build, Lua 5.1, no deprecated globals.
+- Read `CRAFT.md` before any UI, settings, tooltip, sound, or visual work, and review against it before calling that work done. It carries the palette tokens, type levels, information order, sound table, and tooltip contract every module follows.
 
 ## The one system
 
