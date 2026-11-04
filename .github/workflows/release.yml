@@ -14,15 +14,21 @@ jobs:
   release:
     runs-on: ubuntu-latest
 
-    # Token names are the packager's current ones (release.sh "Load
-    # secrets"). CF_API_TOKEN is empty until the CurseForge one-time
-    # setup in the Toolchain wiki page is done; the packager skips
-    # CurseForge while it is empty and still ships the GitHub release.
-    # GH_API_TOKEN gets the automatic GITHUB_TOKEN (read-write
-    # permission, so the packager can publish the release).
+    # Token names: the v2 action still reads the legacy CF_API_KEY
+    # and GITHUB_OAUTH (verified in its release.sh; the new
+    # CF_API_TOKEN/GH_API_TOKEN names only land in later code), so
+    # both generations are set from the same secrets and a packager
+    # upgrade cannot silently stop uploads. CF_API_TOKEN stays empty
+    # until the CurseForge one-time setup in the Toolchain wiki page
+    # is done; the packager skips CurseForge while it is empty and
+    # still ships the GitHub release. The GitHub entries get the
+    # automatic GITHUB_TOKEN (read-write permission, so the packager
+    # can publish the release).
     env:
       CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_API_KEY: ${{ secrets.CF_API_TOKEN }}
       GH_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Clone project
