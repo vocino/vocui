@@ -10,7 +10,7 @@ set -u
 dir="${1:?usage: sounds.sh <repo-dir>}"
 fail=0
 
-file="$(grep -rlE --include='*.lua' --exclude-dir=.git --exclude-dir=tests --exclude-dir=.reference 'ns\.SOUNDS[[:space:]]*=[[:space:]]*\{' "$dir" 2>/dev/null | head -1 || true)"
+file="$(grep -rlE --include='*.lua' --exclude-dir=.git --exclude-dir=tests --exclude-dir=.reference --exclude-dir=.release 'ns\.SOUNDS[[:space:]]*=[[:space:]]*\{' "$dir" 2>/dev/null | head -1 || true)"
 if [ -z "$file" ]; then
   echo "no ns.SOUNDS table: every addon confirms toggles and windows with sound"
   echo "FAIL: add ns.SOUNDS and ns.play (FAMILY.md \"Sounds\")."
@@ -24,7 +24,7 @@ for key in on off open close; do
   fi
 done
 
-if ! grep -rqE --include='*.lua' --exclude-dir=.git --exclude-dir=tests --exclude-dir=.reference '(function ns\.play\(|ns\.play[[:space:]]*=[[:space:]]*function)' "$dir"; then
+if ! grep -rqE --include='*.lua' --exclude-dir=.git --exclude-dir=tests --exclude-dir=.reference --exclude-dir=.release '(function ns\.play\(|ns\.play[[:space:]]*=[[:space:]]*function)' "$dir"; then
   echo "no ns.play function: every addon plays its sounds through one helper"
   fail=1
 fi
@@ -42,7 +42,7 @@ while IFS= read -r f; do
     echo "play it through ns.play/ns.playID in $file instead"
     fail=1
   fi
-done < <(find "$dir" -name '*.lua' -not -path '*/.git/*' -not -path '*/tests/*' -not -path '*/.reference/*')
+done < <(find "$dir" -name '*.lua' -not -path '*/.git/*' -not -path '*/tests/*' -not -path '*/.reference/*' -not -path '*/.release/*')
 
 if [ "$fail" -eq 1 ]; then
   echo "FAIL: add ns.SOUNDS and ns.play (FAMILY.md \"Sounds\")."

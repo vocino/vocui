@@ -19,7 +19,7 @@ while IFS= read -r f; do
     echo "$hits" | head -5
     fail=1
   fi
-done < <(find "$dir" -name '*.lua' -not -path '*/.git/*' -not -path '*/tests/*' -not -path '*/.reference/*')
+done < <(find "$dir" -name '*.lua' -not -path '*/.git/*' -not -path '*/tests/*' -not -path '*/.reference/*' -not -path '*/.release/*')
 
 if [ "$fail" -eq 1 ]; then
   echo "FAIL: drop the trailing period; a chat line is a log entry (FAMILY.md \"Chat voice\")."

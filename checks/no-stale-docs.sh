@@ -16,7 +16,7 @@ while IFS= read -r f; do
     grep -nE 'CRAFT\.md|(^|[^_a-zA-Z/])docs/|README principle' "$f" | head -5
     fail=1
   fi
-done < <(find "$dir" -type f \( -name '*.lua' -o -name '*.md' -o -name '*.toc' -o -name '*.sh' -o -name '*.yml' -o -name '*.json' \) -not -path '*/.git/*' -not -path '*/wiki/*' -not -path '*/.reference/*' -not -name 'no-stale-docs.sh')
+done < <(find "$dir" -type f \( -name '*.lua' -o -name '*.md' -o -name '*.toc' -o -name '*.sh' -o -name '*.yml' -o -name '*.json' \) -not -path '*/.git/*' -not -path '*/wiki/*' -not -path '*/.reference/*' -not -path '*/.release/*' -not -name 'no-stale-docs.sh')
 if [ "$fail" -eq 1 ]; then
   echo "FAIL: repo points outside the wiki; repoint to wiki/ pages."
   exit 1

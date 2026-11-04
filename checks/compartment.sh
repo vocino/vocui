@@ -14,7 +14,7 @@ dir="${1:?usage: compartment.sh <repo-dir>}"
 fail=0
 found=0
 
-slash_line="$(grep -rhE --include='*.lua' --exclude-dir=.git --exclude-dir=tests --exclude-dir=.reference '^SLASH_[A-Z0-9_]*1[[:space:]]*=' "$dir" 2>/dev/null | head -1 || true)"
+slash_line="$(grep -rhE --include='*.lua' --exclude-dir=.git --exclude-dir=tests --exclude-dir=.reference --exclude-dir=.release '^SLASH_[A-Z0-9_]*1[[:space:]]*=' "$dir" 2>/dev/null | head -1 || true)"
 short="$(printf '%s' "$slash_line" | sed -nE "s|.*(['\"])(/[A-Za-z0-9]+)\1.*|\2|p")"
 if [ -z "$short" ]; then
   echo "no SLASH_*1 short-slash definition in Lua (e.g. SLASH_VOCGEAR1 = \"/vg\")"
@@ -31,7 +31,7 @@ for toc in "$dir"/*.toc; do
       fail=1
       continue
     fi
-    if ! grep -rqE "^function ${fn}\(" --include='*.lua' "$dir" --exclude-dir=.git --exclude-dir=tests --exclude-dir=.reference; then
+    if ! grep -rqE "^function ${fn}\(" --include='*.lua' "$dir" --exclude-dir=.git --exclude-dir=tests --exclude-dir=.reference --exclude-dir=.release; then
       echo "$toc names ${key} ${fn}, but no Lua file defines it"
       fail=1
     fi

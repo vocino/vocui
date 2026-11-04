@@ -44,19 +44,25 @@ end
 -- not report one. Blizzard's own BuffFrame reads auraData.expirationTime
 -- against GetTime() the same way (forever branch, BuffFrame.lua); a
 -- missing aura, a missing field, a missing clock, or an expired stamp all
--- read no time, never an error.
+-- read no time, never an error. The stamp can also arrive secret,
+-- and a secret errors on compare and arithmetic in addon code:
+-- canaccessvalue gates both, presence-gated like every other read.
 function xp.auraTimeLeft(spellID)
   local aura = xp.playerAura(spellID)
   if type(aura) ~= "table" then
     return nil
   end
-  if type(aura.expirationTime) ~= "number" or aura.expirationTime <= 0 then
+  local expires = aura.expirationTime
+  if canaccessvalue and not canaccessvalue(expires) then
+    return nil
+  end
+  if type(expires) ~= "number" or expires <= 0 then
     return nil
   end
   if type(GetTime) ~= "function" then
     return nil
   end
-  local left = aura.expirationTime - GetTime()
+  local left = expires - GetTime()
   if type(left) ~= "number" or left <= 0 then
     return nil
   end

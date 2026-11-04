@@ -38,7 +38,7 @@ while IFS= read -r f; do
     grep -nE 'Set(Text|Vertex)Color\([0-9]' "$f" | head -5
     fail=1
   fi
-done < <(find "$dir" -name '*.lua' -not -path '*/.git/*' -not -path '*/tests/*' -not -path '*/.reference/*')
+done < <(find "$dir" -name '*.lua' -not -path '*/.git/*' -not -path '*/tests/*' -not -path '*/.reference/*' -not -path '*/.release/*')
 
 if [ "$fail" -eq 1 ]; then
   echo "FAIL: move colors into the palette file and reference them by name."

@@ -30,7 +30,7 @@ read_globals = {
   "EventRegistry", "EXHAUSTION_TICK_OFFSET_Y",
   "GetAverageItemLevel", "GetInventoryItemLink", "GetMaxLevelForLatestExpansion", "GetMaxLevelForPlayerExpansion",
   "GetMaxPlayerLevel", "GetMoney", "GetQuestLogRewardXP", "GetRepairAllCost", "GetTime", "GetXPExhaustion",
-  "CanGuildBankRepair", "CanMerchantRepair",
+  "canaccessvalue", "CanGuildBankRepair", "CanMerchantRepair",
   "InCombatLockdown", "IsInGuild", "IsInInstance", "IsTrialAccount", "IsXPUserDisabled",
   "MAX_REPUTATION_REACTION", "NUM_BAG_SLOTS",
   "PaperDollFrame", "PaperDollFrame_SetItemLevel",

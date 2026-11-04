@@ -27,7 +27,7 @@ while IFS= read -r f; do
     echo "$hits" | head -5
     fail=1
   fi
-done < <(find "$dir" -name '*.lua' -not -path '*/.git/*' -not -path '*/tests/*' -not -path '*/.reference/*')
+done < <(find "$dir" -name '*.lua' -not -path '*/.git/*' -not -path '*/tests/*' -not -path '*/.reference/*' -not -path '*/.release/*')
 
 rc="$dir/.luacheckrc"
 if [ -f "$rc" ]; then

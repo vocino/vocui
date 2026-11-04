@@ -11,7 +11,7 @@ set -u
 dir="${1:?usage: help-table.sh <repo-dir>}"
 fail=0
 
-files="$(grep -lE '^\s*ns\.HELP\s*=\s*\{' $(find "$dir" -name '*.lua' -not -path '*/.git/*' -not -path '*/tests/*' -not -path '*/.reference/*') 2>/dev/null || true)"
+files="$(grep -lE '^\s*ns\.HELP\s*=\s*\{' $(find "$dir" -name '*.lua' -not -path '*/.git/*' -not -path '*/tests/*' -not -path '*/.reference/*' -not -path '*/.release/*') 2>/dev/null || true)"
 count="$(printf '%s' "$files" | grep -c . || true)"
 if [ "$count" -eq 0 ]; then
   echo "no ns.HELP table: every addon lists its subcommands under /<short> help"

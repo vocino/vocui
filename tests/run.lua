@@ -1865,6 +1865,22 @@ do
     return nil
   end
   check("active without a clock reads no time", xp.bonusParts("xp")[1] == "Well Fed · kill XP")
+  _G.C_UnitAuras.GetPlayerAuraBySpellID = function(id)
+    if id == 24870 then
+      return { expirationTime = 2500 }
+    end
+    return nil
+  end
+  _G.canaccessvalue = function()
+    return false
+  end
+  check("secret stamps read no time, never an error", xp.auraTimeLeft(24870) == nil)
+  _G.canaccessvalue = function()
+    return true
+  end
+  check("allowed stamps keep their time", xp.auraTimeLeft(24870) == 1500)
+  _G.canaccessvalue = nil
+  check("no guard keeps the old read", xp.auraTimeLeft(24870) == 1500)
   _G.IsInInstance = function()
     return true
   end
