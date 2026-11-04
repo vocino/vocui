@@ -2,7 +2,7 @@ local _, ns = ...
 
 -- Palette, defined once and loaded first. Every color the package
 -- paints is a name from this table; nothing writes an RGB triple at
--- a call site. The tokens are the family's: gold for titles and
+-- a call site. The tokens are VocUI's: gold for titles and
 -- emphasis, white for body, gray for secondary text, red and green
 -- for state only.
 ns.COLORS = {

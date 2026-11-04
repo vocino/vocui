@@ -4,11 +4,11 @@
 
 - `VocUI.toc` - Forever client metadata (Interface 16001)
 - `core/` - loader, settings store and page builder, shared reads (combat, guest presence, bag walk), guest services (Syndicator inventory, Auctionator prices), palette, sounds, chat, slash
-- `modules/` - one folder per module, descriptor first (gear so far)
+- `modules/` - one folder per module, descriptor first (gear, xp, vendor so far)
 - `tests/` - headless tests (`lua tests/run.lua`)
 - `wiki/` - the docs (ignored clone of `vocino/vocui.wiki.git`, the single source; see Wiki below)
 - `wiki/Home.md` - the wiki index: Principles, Craft, Coding, API pages, Toolchain, Gear, Log
-- `wiki/Principles.md` - the charter: 25 principles, module contract, absorption/graduation
+- `wiki/Principles.md` - the charter: 25 principles, module contract, self-contained statement
 - `wiki/Craft.md` - the style paradigms: palette, type, panels, sounds, hover, anti-patterns
 - `wiki/Coding.md` - how Lua is written here: file shape, naming, slash grammar, chat voice, sounds, settings mechanics
 - `wiki/API-Verification.md` - sources of truth and the API verification procedure; `wiki/API-Ledger.md` is the verdict record

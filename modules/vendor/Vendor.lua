@@ -2,14 +2,11 @@ local _, ns = ...
 local vendor = {}
 ns.vendor = vendor
 
--- Vendor: the merchant visit, automated. Poor-quality items sell the
--- moment the merchant window opens, gear repairs right after, each
--- with one chat line. This is the Forever half of the family addon
--- VocVendor; only its merchant behavior came across, rebuilt under
--- the module contract. Nothing here is retail-only to drop, but the
--- old-gear upgrading, expansion handling, disenchanting, and the
--- Sell Junk button hook stayed behind: this module sells junk and
--- repairs, nothing else.
+-- Vendor: the merchant visit, automated, under the module contract.
+-- Poor-quality items sell the moment the merchant window opens, gear
+-- repairs right after, each with one chat line. The module sells
+-- junk and repairs, nothing else: no old-gear selling, no expansion
+-- handling, no disenchanting, and no Sell Junk button.
 
 vendor.SECTION = "modules.vendor"
 
@@ -169,7 +166,7 @@ vendor.descriptor = descriptor
 ns.modules.Register(descriptor)
 
 -- Help lines for this module's subcommands, behind the xp block and
--- ahead of the config/help pair so the family grammar
+-- ahead of the config/help pair so the house grammar
 -- (config second to last, help last) still holds.
 do
   local lines = {

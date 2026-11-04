@@ -2,19 +2,18 @@ local _, ns = ...
 local gear = {}
 ns.gear = gear
 
--- Gear: equip bag upgrades out of combat. This is the Forever build of
--- the VocGear job, rebuilt under the VocUI module contract. Forever has
--- no Pawn build, so item level decides here; the Pawn path, its scale
--- and margin options, and the Great Vault helper are Retail-only in
--- VocGear and do not exist in this module at all.
+-- Gear: equip bag upgrades out of combat, under the VocUI module
+-- contract. Item level decides: Forever has no stat weights to
+-- configure, so there is no weight path, no scale or margin options,
+-- and no vault helper in this module at all.
 
 gear.SECTION = "modules.gear"
 
 -- Defaults are the product: the module ships set up the way its player
 -- plays, and the settings page exists mainly to turn things off. Only
--- options that do something on the Forever client are declared; the
--- VocGear options tied to Pawn (minimum upgrade %, Pawn scale, include
--- item-level upgrades) and to the Great Vault have no row here.
+-- options that do something on the Forever client are declared;
+-- weight options (minimum upgrade %, scale, include item-level
+-- upgrades) have no row here because item level is the judgment.
 gear.defaults = {
   enabled = true,
   announce = true,
@@ -256,7 +255,7 @@ gear.descriptor = descriptor
 ns.modules.Register(descriptor)
 
 -- Help lines for this module's subcommands, inserted ahead of the
--- config/help pair so the family grammar (config second to last, help
+-- config/help pair so the house grammar (config second to last, help
 -- last) still holds.
 do
   local lines = {

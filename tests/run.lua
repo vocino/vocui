@@ -56,7 +56,7 @@ do
   local ns = loadCore()
   local c = ns.COLORS
   check(
-    "family tokens present",
+    "palette tokens present",
     c.gold[1] == 1 and c.gold[2] == 0.82 and c.gold[3] == 0 and c.text and c.muted and c.red and c.green
   )
   local r, g, b, a = ns.rgb(c.gold, 0.5)
@@ -65,10 +65,10 @@ do
   check("rgb without alpha", r == 1 and g == 1 and b == 1 and a == nil)
 end
 
--- Chat.lua: the family chat voice (colored prefix, no trailing period)
+-- Chat.lua: the chat voice (colored prefix, no trailing period)
 do
   local ns = loadCore()
-  check("family prefix color", ns.PREFIX_COLOR == "ff66ccff")
+  check("chat prefix color", ns.PREFIX_COLOR == "ff66ccff")
   local said = capturePrint(function()
     ns.say("hello")
   end)
@@ -647,7 +647,7 @@ do
   check("wrong-typed keys reset to defaults", live.enabled == true and live.label == "x" and live.extra == 1)
 end
 
--- Gear module: the Forever build of the VocGear job. Item level decides
+-- Gear module: equip bag upgrades by item level. Item level decides
 -- (Pawn has no Forever build); Pawn and Great Vault code does not exist.
 local GEAR = {
   "modules/gear/Gear.lua",
@@ -1443,7 +1443,7 @@ do
   _G.GameTooltip = nil
 end
 
--- XP module: the Forever build of the VocXP job. Rate and reputation
+-- XP module: the leveling readout. Rate and reputation
 -- math, rested and quest overlays, War Mode and aura detection without
 -- Forever suggestions, and no Regalia (retail-only, never on Forever).
 local XP = {

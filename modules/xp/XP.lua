@@ -2,14 +2,12 @@ local _, ns = ...
 local xp = {}
 ns.xp = xp
 
--- XP: the leveling readout, rebuilt from the VocXP job under the VocUI
--- module contract. A bar with XP per hour and time to level, rested
--- reach and ready-to-turn-in quest XP overlaid, refreshed every second;
--- at max level the same bar follows reputation instead. Only the
--- Forever behavior came across: the Regalia set is retail-only and does
--- not exist here, so it has no line; War Mode, Mentored, and the event
--- buffs are unconfirmed on Forever, so they have no registry entry
--- at all. The tooltip's bonuses section reports the registry's active
+-- XP: the leveling readout, under the VocUI module contract. A bar
+-- with XP per hour and time to level, rested reach and ready-to-turn-in
+-- quest XP overlaid, refreshed every second; at max level the same bar
+-- follows reputation instead. War Mode, Mentored, and the event buffs
+-- are unconfirmed on Forever, so they have no registry entry at all.
+-- The tooltip's bonuses section reports the registry's active
 -- and missing halves while leveling; the bar's own reach lines keep
 -- reporting rested and quest XP. Detection stays presence-gated
 -- throughout: a missing API means a missing overlay, never an error.
@@ -191,7 +189,7 @@ xp.descriptor = descriptor
 ns.modules.Register(descriptor)
 
 -- Help lines for this module's subcommands, inserted behind the gear
--- block and ahead of the config/help pair so the family grammar
+-- block and ahead of the config/help pair so the house grammar
 -- (config second to last, help last) still holds.
 do
   local lines = {

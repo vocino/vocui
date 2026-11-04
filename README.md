@@ -30,7 +30,9 @@ accident, not a design goal.
 ## What this is
 
 - One addon package for the Forever client only, installed as a single
-  folder, updated as a single release.
+  folder, updated as a single release. Self-contained: its core, its
+  modules, its craft, and its rules all live in this repo and its
+  wiki, and it owes nothing to any other project.
 - A work in progress by design. It is never finished, because the play
   it serves is never finished; it just keeps accumulating the modules
   its player has needed so far.
@@ -68,15 +70,17 @@ The design target, stated plainly so modules can be judged against it:
 
 ## Charter
 
-The 25 principles, the module contract, absorption and graduation,
-repository layout, and how the charter evolves live in the wiki:
+The 25 principles, the module contract, repository layout, and how
+the charter evolves live in the wiki:
 [Principles](https://github.com/vocino/vocui/wiki/Principles) (local
 copy: wiki/Principles.md). API in
 [API-Verification](https://github.com/vocino/vocui/wiki/API-Verification),
 style in [Craft](https://github.com/vocino/vocui/wiki/Craft) and
 [Coding](https://github.com/vocino/vocui/wiki/Coding), core decisions in
-[Principles](https://github.com/vocino/vocui/wiki/Principles), the gear module in
-[Modules-Gear](https://github.com/vocino/vocui/wiki/Modules-Gear). This README
+[Principles](https://github.com/vocino/vocui/wiki/Principles), the modules in
+[Modules-Gear](https://github.com/vocino/vocui/wiki/Modules-Gear),
+[Modules-XP](https://github.com/vocino/vocui/wiki/Modules-XP), and
+[Modules-Vendor](https://github.com/vocino/vocui/wiki/Modules-Vendor). This README
 keeps the player's profile and the package status; for everything
 else, the wiki is the single source.
 
@@ -87,8 +91,8 @@ settings store, palette, sounds, chat, slash, and the headless test
 harness). Modules so far:
 - **Gear** (`modules/gear/`): equips bag upgrades out of combat by
   item level, with its own page under Settings > AddOns > VocUI and
-  `/vui gear` subcommands. The Forever half of VocGear; the Pawn and
-  Great Vault halves stayed behind in VocGear, which is unchanged.
+  `/vui gear` subcommands. Item level is the whole judgment; Forever
+  has no stat weights to configure.
   Bag contents come from Syndicator when it is present and settled
   (else Blizzard's own bag walk), and item values from Auctionator
   with a vendor fallback; both are guests, never requirements.
@@ -96,16 +100,14 @@ harness). Modules so far:
   bar, with rested reach and ready-to-turn-in quest XP overlaid, and
   reputation with Rep/hr at max level. While leveling, the tooltip
   carries a bonuses section: verified XP effects show active with time
-  left and missing dimmed, with a food-in-bags hint. The Forever half
-  of VocXP; the
-  Regalia set stayed behind in VocXP, which is unchanged. Its own page
+  left and missing dimmed, with a food-in-bags hint. Its own page
   under Settings > AddOns > VocUI and `/vui xp` subcommands.
 - **Vendor** (`modules/vendor/`): sells poor-quality junk and repairs
   gear automatically at the merchant, guild funds first, audit mode
-  instead of acting, and a deduped Vendor line in item tooltips. The
-  Forever half of VocVendor; old gear, disenchanting, and the button
-  hook stayed behind in VocVendor, which is unchanged. Its own page
-  under Settings > AddOns > VocUI and `/vui vendor` subcommands.
+  instead of acting, and a deduped Vendor line in item tooltips. It
+  sells junk and repairs, nothing else: no old-gear selling, no
+  disenchanting, no button. Its own page under Settings > AddOns >
+  VocUI and `/vui vendor` subcommands.
 
 From here the package grows the way it was designed to: a module at
 a time, added while playing, each
@@ -113,8 +115,4 @@ one recorded here when it lands.
 
 ---
 
-Built for Forever, for one player, by vocino. The four family addons
-stay independent: [VocWarbank](https://github.com/vocino/vocwarbank) ??
-[VocGear](https://github.com/vocino/vocgear) ??
-[VocXP](https://github.com/vocino/vocxp) ??
-[VocVendor](https://github.com/vocino/vocvendor)
+Built for Forever, for one player, by vocino.

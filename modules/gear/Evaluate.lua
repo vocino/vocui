@@ -1,9 +1,9 @@
 local _, ns = ...
 local gear = ns.gear
 
--- Upgrade judgment: pure item level, the Forever path. VocGear's Pawn
--- path does not exist here (Pawn has no Forever build), so this file is
--- the whole verdict: an item level comparison against what is worn,
+-- Upgrade judgment: pure item level. There is no weight path to
+-- consult, so this file is the whole verdict: an item level
+-- comparison against what is worn,
 -- behind the usability gates below. Result shape:
 --   nil when unsure (data uncached or erroring), else
 --   { upgrade=bool, ilvl=bool, ilvlDiff=n|nil, itemLevel=n|nil }
