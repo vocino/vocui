@@ -95,7 +95,8 @@ harness). Modules so far:
   has no stat weights to configure.
   Bag contents come from Syndicator when it is present and settled
   (else Blizzard's own bag walk), and item values from Auctionator
-  with a vendor fallback; both are guests, never requirements.
+  with a vendor fallback, and its upgrade verdicts badge Baganator's
+  bags; all three are guests, never requirements.
 - **XP** (`modules/xp/`): XP per hour and time to level on its own
   bar, with rested reach and ready-to-turn-in quest XP overlaid, and
   reputation with Rep/hr at max level. While leveling, the tooltip
@@ -104,7 +105,8 @@ harness). Modules so far:
   under Settings > AddOns > VocUI and `/vui xp` subcommands.
 - **Vendor** (`modules/vendor/`): sells poor-quality junk and repairs
   gear automatically at the merchant, guild funds first, audit mode
-  instead of acting, and a deduped Vendor line in item tooltips. It
+  instead of acting, a deduped Vendor line in item tooltips, and a junk
+  coin in Baganator's bags. It
   sells junk and repairs, nothing else: no old-gear selling, no
   disenchanting, no button. Its own page under Settings > AddOns >
   VocUI and `/vui vendor` subcommands.

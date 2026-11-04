@@ -6,7 +6,7 @@
 ## Category: Interface
 ## IconTexture: Interface\Icons\INV_Misc_Gear_01
 ## SavedVariables: VocUIDB
-## OptionalDeps: Syndicator, Auctionator
+## OptionalDeps: Syndicator, Auctionator, Baganator
 ## AddonCompartmentFunc: VocUI_CompartmentClick
 ## AddonCompartmentFuncOnEnter: VocUI_CompartmentEnter
 ## AddonCompartmentFuncOnLeave: VocUI_CompartmentLeave
@@ -30,6 +30,7 @@ modules/gear/Evaluate.lua
 modules/gear/Panel.lua
 modules/gear/Scan.lua
 modules/gear/Sheet.lua
+modules/gear/Plugins.lua
 modules/xp/XP.lua
 modules/xp/Bar.lua
 modules/xp/Bonuses.lua
@@ -42,3 +43,4 @@ modules/vendor/Panel.lua
 modules/vendor/Repair.lua
 modules/vendor/Sell.lua
 modules/vendor/Tooltip.lua
+modules/vendor/Plugins.lua

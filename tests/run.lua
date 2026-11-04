@@ -655,6 +655,7 @@ local GEAR = {
   "modules/gear/Panel.lua",
   "modules/gear/Scan.lua",
   "modules/gear/Sheet.lua",
+  "modules/gear/Plugins.lua",
 }
 local function loadGear()
   local ns = loadCore()
@@ -965,6 +966,61 @@ do
   )
 end
 
+-- Gear as a Baganator upgrade plugin: our verdicts badge the bags.
+do
+  local w = gearWorld()
+  local ns = loadGear()
+  ns.db = {}
+  local gear = ns.gear
+  addItem(w, "oldchest", { equipLoc = "INVTYPE_CHEST", ilvl = 10, classID = 4, subclassID = 1 })
+  addItem(w, "newchest", { equipLoc = "INVTYPE_CHEST", ilvl = 15, classID = 4, subclassID = 1 })
+  w.equipped[5] = "oldchest"
+  ns.modules.InitAll()
+  check("an upgrade badges true", gear.UpgradeForBaganator("newchest") == true)
+  check("a lateral badges false", gear.UpgradeForBaganator("oldchest") == false)
+  check("an unknown link badges nil", gear.UpgradeForBaganator("mystery") == nil)
+  check("junk input badges nil", gear.UpgradeForBaganator(nil) == nil)
+  gear.opts().enabled = false
+  check("a disabled module badges nil", gear.UpgradeForBaganator("newchest") == nil)
+  gear.opts().enabled = true
+  local seen = {}
+  local function stubBaganator()
+    _G.Baganator = {
+      API = {
+        RegisterUpgradePlugin = function(label, id, fn)
+          seen = { label = label, id = id, fn = fn }
+        end,
+      },
+    }
+  end
+  _G.C_AddOns = {
+    IsAddOnLoaded = function(name)
+      return name == "Baganator"
+    end,
+  }
+  stubBaganator()
+  gear.RegisterBaganatorPlugin()
+  check("a loaded Baganator registers now", seen.id == "vocui-gear" and seen.label == "VocUI Gear")
+  check("the registered callback is the verdict", seen.fn("newchest") == true)
+  _G.C_AddOns = {
+    IsAddOnLoaded = function()
+      return false
+    end,
+  }
+  _G.Baganator = nil
+  seen = {}
+  gear.RegisterBaganatorPlugin()
+  check("an absent Baganator registers nothing yet", seen.id == nil)
+  stubBaganator()
+  for _, frame in ipairs(mock.frames) do
+    if frame.scripts.OnEvent and frame.events.ADDON_LOADED then
+      pcall(frame.scripts.OnEvent, frame, "ADDON_LOADED", "Baganator")
+    end
+  end
+  check("the guest load registers later", seen.id == "vocui-gear" and seen.fn("newchest") == true)
+  _G.Baganator, _G.C_AddOns = nil, nil
+end
+
 -- Gear panel: subcategory under VocUI, Forever rows only, live callbacks
 do
   local w = gearWorld()
@@ -1264,6 +1320,49 @@ do
   check("junk names read clear", ns.guests.IsLoaded(nil) == false)
   _G.C_AddOns = nil
   check("missing api never reads loaded", ns.guests.IsLoaded("There") == false)
+end
+
+-- Guests.WhenLoaded: now when loaded, later on ADDON_LOADED, never an error.
+do
+  local ns = loadCore()
+  local ran = {}
+  _G.C_AddOns = {
+    IsAddOnLoaded = function(name)
+      return name == "There"
+    end,
+  }
+  check("loaded guests run now", ns.guests.WhenLoaded("There", function()
+    ran[#ran + 1] = "now"
+  end) == true and ran[1] == "now")
+  check(
+    "bad arguments decline",
+    ns.guests.WhenLoaded(nil, function() end) == false and ns.guests.WhenLoaded("There", nil) == false
+  )
+  check("a throwing guest never propagates", ns.guests.WhenLoaded("There", function()
+    error("boom")
+  end) == true)
+  check("absent guests defer", ns.guests.WhenLoaded("Away", function()
+    ran[#ran + 1] = "later"
+  end) == true and #ran == 1)
+  local function fire(name)
+    for _, frame in ipairs(mock.frames) do
+      if frame.scripts.OnEvent and frame.events.ADDON_LOADED then
+        frame.scripts.OnEvent(frame, "ADDON_LOADED", name)
+      end
+    end
+  end
+  fire("Other")
+  check("other addons fire nothing", #ran == 1)
+  fire("Away")
+  check("the guest load runs the waiter", ran[2] == "later")
+  fire("Away")
+  check("a load fires once", #ran == 2)
+  _G.C_AddOns = nil
+  local fresh = loadCore()
+  local savedFrame = _G.CreateFrame
+  _G.CreateFrame = nil
+  check("missing frame api declines", fresh.guests.WhenLoaded("Away", function() end) == false)
+  _G.CreateFrame = savedFrame
 end
 
 -- The fallback bag walk: every readable slot once, early stop honored.
@@ -2182,6 +2281,7 @@ local VENDOR = {
   "modules/vendor/Repair.lua",
   "modules/vendor/Sell.lua",
   "modules/vendor/Tooltip.lua",
+  "modules/vendor/Plugins.lua",
 }
 local function loadVendor()
   local ns = loadCore()
@@ -2627,6 +2727,61 @@ do
   enabledSetting.callback("enabled")
   check("panel toggle applies live", vendor.frame.events.MERCHANT_SHOW == nil)
   _G.Settings, _G.SettingsPanel, _G.CreateSettingsListSectionHeaderInitializer = nil, nil, nil
+end
+
+-- Vendor as a Baganator junk plugin: poor quality coins the bags.
+do
+  vendorWorld()
+  local ns = loadVendor()
+  ns.db = {}
+  ns.modules.InitAll()
+  local vendor = ns.vendor
+  check("poor quality coins junk", vendor.JunkForBaganator(0, 1, nil, "item:1") == true)
+  check("fine quality coins nothing", vendor.JunkForBaganator(0, 2, nil, "item:2") == false)
+  check("the bag slot answers without a link", vendor.JunkForBaganator(1, 1, nil, nil) == true)
+  check("unknown slots coin nothing", vendor.JunkForBaganator(9, 9, nil, nil) == false)
+  ns.db.modules.vendor.enabled = false
+  check("a disabled module coins nothing", vendor.JunkForBaganator(0, 1, nil, "item:1") == false)
+  ns.db.modules.vendor.enabled = true
+  ns.db.modules.vendor.sellJunk = false
+  check("a quiet module coins nothing", vendor.JunkForBaganator(0, 1, nil, "item:1") == false)
+  ns.db.modules.vendor.sellJunk = true
+  local seen = {}
+  local function stubBaganator()
+    _G.Baganator = {
+      API = {
+        RegisterJunkPlugin = function(label, id, fn)
+          seen = { label = label, id = id, fn = fn }
+        end,
+      },
+    }
+  end
+  _G.C_AddOns = {
+    IsAddOnLoaded = function(name)
+      return name == "Baganator"
+    end,
+  }
+  stubBaganator()
+  vendor.RegisterBaganatorPlugin()
+  check("a loaded Baganator registers now", seen.id == "vocui-vendor" and seen.label == "VocUI Vendor")
+  check("the registered callback is the verdict", seen.fn(0, 1, nil, "item:1") == true)
+  _G.C_AddOns = {
+    IsAddOnLoaded = function()
+      return false
+    end,
+  }
+  _G.Baganator = nil
+  seen = {}
+  vendor.RegisterBaganatorPlugin()
+  check("an absent Baganator registers nothing yet", seen.id == nil)
+  stubBaganator()
+  for _, frame in ipairs(mock.frames) do
+    if frame.scripts.OnEvent and frame.events.ADDON_LOADED then
+      pcall(frame.scripts.OnEvent, frame, "ADDON_LOADED", "Baganator")
+    end
+  end
+  check("the guest load registers later", seen.id == "vocui-vendor" and seen.fn(0, 1, nil, "item:1") == true)
+  _G.Baganator, _G.C_AddOns = nil, nil
 end
 
 print(string.format("%d passed, %d failed", pass, fail))

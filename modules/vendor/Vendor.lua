@@ -124,6 +124,9 @@ end
 
 function vendor.InitImpl()
   vendor.ApplyEnabledImpl()
+  if vendor.RegisterBaganatorPlugin then
+    vendor.RegisterBaganatorPlugin()
+  end
   if vendor.opts().tooltipPrice then
     vendor.InstallTooltip()
   end

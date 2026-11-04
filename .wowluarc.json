@@ -9,6 +9,7 @@
   ],
   "globals": {
     "read": [
+      "Baganator",
       "Auctionator",
       "Syndicator",
       "Auctionator",

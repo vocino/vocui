@@ -421,6 +421,9 @@ end
 
 function gear.InitImpl()
   gear.opts() -- fill VocUIDB.modules.gear from defaults
+  if gear.RegisterBaganatorPlugin then
+    gear.RegisterBaganatorPlugin()
+  end
   local frame = CreateFrame("Frame")
   gear.frame = frame
   frame:RegisterEvent("ADDON_LOADED")
