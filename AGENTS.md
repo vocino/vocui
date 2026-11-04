@@ -106,6 +106,10 @@ The full contract is in `wiki/Principles.md`, "The module contract". The shape:
   no state anywhere else.
 - No module calls another module. Shared needs go through core
   services or core broadcasts.
+- One implementation of anything shared: when a second module needs
+  what a first module built, promote it to a core service and use it
+  from both (wiki/Principles.md #11). Duplication is only for the
+  trivial, a few lines with no behavior worth naming.
 - Init runs inside a protected call from the core loader; a module
   that fails its validity predicate is never initialized or listed.
 
@@ -129,7 +133,9 @@ Follow these steps in order, every time (Principles #25 in the wiki). If a
 step does not fit the module, extend this list in the same commit.
 
 1. Create `modules/<job>/` with the descriptor file first, then the
-   module's files. One job, statable in one sentence. Survey `core/`
+   module's files. One job, statable in one sentence. Before building
+   anything, check `core/` and the other modules for an existing
+   implementation of it; a second need promotes to core, never copies. Survey `core/`
    before writing logic: a need another module already met lives in
    a core service (Principles #11) — use it, and if the service does
    not exist yet, extract it and migrate the older module to it.
