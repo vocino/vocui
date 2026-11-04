@@ -42,6 +42,26 @@ gear.EQUIP_SOUNDS = {
   { id = "73277", key = "UI_WORLDQUEST_COMPLETE", label = "World quest complete" },
 }
 
+-- The equip-sound choices as data: off plus the client chimes.
+-- The panel row carries this table; the core turns it into the
+-- dropdown options function, so the control vocabulary lives in the
+-- core exactly once (Principles #11).
+function gear.EquipSoundChoices()
+  local choices = {
+    { value = "0", label = "Off", tooltip = "No sound when equipping" },
+  }
+  for _, snd in ipairs(gear.EQUIP_SOUNDS) do
+    choices[#choices + 1] = { value = snd.id, label = snd.label, tooltip = "" }
+  end
+  return choices
+end
+
+-- The dropdown options function, built by the core from the choices
+-- above. Kept so the dropdown and its test read the same source.
+function gear.EquipSoundOptions()
+  return ns.settings.DropdownOptions(gear.EquipSoundChoices())()
+end
+
 -- Play the configured equip sound through the core helper's route
 -- (ns.playID, presence-gated). SOUNDKIT names first and the numeric
 -- IDs behind them, so a Blizzard rename never silences the polish.
@@ -80,6 +100,10 @@ gear.OPTIONS = {
     tooltip = "Equip bag upgrades out of combat by item level",
   },
   {
+    kind = "header",
+    label = "Announcements",
+  },
+  {
     key = "announce",
     kind = "checkbox",
     label = "Chat announcements",
@@ -90,6 +114,10 @@ gear.OPTIONS = {
     kind = "checkbox",
     label = "Audit mode",
     tooltip = "Announce only: never equip, just say what would happen",
+  },
+  {
+    kind = "header",
+    label = "Equipping",
   },
   {
     key = "autoTwoSlot",
@@ -116,10 +144,19 @@ gear.OPTIONS = {
     tooltip = "Equip upgrades across weapon types and across the one-hand/two-hand line. Melee-to-ranged swaps always announce instead",
   },
   {
+    kind = "header",
+    label = "Feedback",
+  },
+  {
     key = "equipSound",
     kind = "dropdown",
+    choices = gear.EquipSoundChoices(),
     label = "Equip sound",
     tooltip = "Sound played when Gear equips an upgrade. Changing it previews the sound",
+  },
+  {
+    kind = "header",
+    label = "Character sheet",
   },
   {
     key = "sessionIlvl",

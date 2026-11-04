@@ -344,6 +344,171 @@ do
   check("open without Settings prints the path", said == "open Settings > AddOns > VocUI")
 end
 
+-- Settings.lua BuildPage: slider, header, and choices rows
+do
+  local registered, created, headers = {}, {}, {}
+  _G.Settings = {
+    RegisterAddOnSetting = function(page, variable, key, tbl, vtype, label, default)
+      local s = { page = page, key = key, vtype = vtype }
+      s.SetValueChangedCallback = function(_, fn)
+        s.callback = fn
+      end
+      registered[#registered + 1] = s
+      return s
+    end,
+    CreateCheckbox = function(_, s, tooltip)
+      created[#created + 1] = { kind = "checkbox", setting = s, tooltip = tooltip }
+      return {}
+    end,
+    CreateSliderOptions = function(minValue, maxValue, step)
+      return { minValue = minValue, maxValue = maxValue, step = step }
+    end,
+    CreateSlider = function(_, s, options, tooltip)
+      created[#created + 1] = { kind = "slider", setting = s, options = options, tooltip = tooltip }
+      return {}
+    end,
+    CreateDropdown = function(_, s, options, tooltip)
+      created[#created + 1] = { kind = "dropdown", setting = s, options = options, tooltip = tooltip }
+      return {}
+    end,
+    CreateControlTextContainer = function()
+      local data = {}
+      return {
+        Add = function(_, v, label, tip)
+          data[#data + 1] = { value = v, label = label, tooltip = tip }
+        end,
+        GetData = function()
+          return data
+        end,
+      }
+    end,
+  }
+  _G.SettingsPanel = {
+    GetLayout = function()
+      return {
+        AddInitializer = function(_, init)
+          headers[#headers + 1] = init
+        end,
+      }
+    end,
+  }
+  _G.CreateSettingsListSectionHeaderInitializer = function(text)
+    return text
+  end
+  local ns = loadCore()
+  ns.db = {}
+  local changed = {}
+  local built = ns.settings.BuildPage(
+    {},
+    "VocUI_demo_",
+    ns.config.Section("demo", { enabled = true, level = 5, mode = "a" }),
+    { enabled = true, level = 5, mode = "a" },
+    {
+      { key = "enabled", kind = "checkbox", label = "On", tooltip = "Toggle" },
+      { kind = "header", label = "Group" },
+      { key = "level", kind = "slider", label = "Level", tooltip = "How much", min = 1, max = 10, step = 2 },
+      {
+        key = "mode",
+        kind = "dropdown",
+        label = "Mode",
+        tooltip = "Which",
+        choices = {
+          { value = "a", label = "Alpha", tooltip = "First" },
+          { value = "b", label = "Beta", tooltip = "Second" },
+        },
+      },
+    },
+    function()
+      return true
+    end,
+    function(key)
+      changed[#changed + 1] = key
+    end
+  )
+  check("page builds the checkbox, slider, and dropdown rows", built == 3)
+  check(
+    "section header adds a label and registers nothing",
+    #headers == 1 and headers[1] == "Group" and #registered == 3
+  )
+  local slider
+  for _, c in ipairs(created) do
+    if c.kind == "slider" then
+      slider = c
+    end
+  end
+  check(
+    "slider carries the range, the step, and the tooltip",
+    slider ~= nil
+      and slider.options.minValue == 1
+      and slider.options.maxValue == 10
+      and slider.options.step == 2
+      and slider.tooltip == "How much"
+  )
+  local dropdown
+  for _, c in ipairs(created) do
+    if c.kind == "dropdown" then
+      dropdown = c
+    end
+  end
+  local picked = dropdown ~= nil and dropdown.options() or {}
+  check(
+    "dropdown choices become the options",
+    #picked == 2 and picked[1].value == "a" and picked[2].label == "Beta" and dropdown.tooltip == "Which"
+  )
+  registered[1].callback()
+  check("row changes call back with the key", changed[1] == "enabled")
+  _G.Settings, _G.SettingsPanel, _G.CreateSettingsListSectionHeaderInitializer = nil, nil, nil
+end
+
+-- Settings.lua Init: an unavailable module gets no page
+do
+  local builtPages, subcats = {}, {}
+  _G.Settings = {
+    RegisterVerticalLayoutCategory = function(n)
+      return {
+        name = n,
+        GetID = function()
+          return 7
+        end,
+      }
+    end,
+    RegisterVerticalLayoutSubcategory = function(parent, n)
+      local sub = { name = n, parent = parent }
+      subcats[#subcats + 1] = sub
+      return sub
+    end,
+    RegisterAddOnCategory = function() end,
+    OpenToCategory = function() end,
+  }
+  local ns = loadCore()
+  ns.db = {}
+  ns.modules.Register({
+    name = "here",
+    job = "x",
+    init = function() end,
+    IsAvailable = function()
+      return true
+    end,
+    BuildPanel = function(page)
+      builtPages[#builtPages + 1] = page
+    end,
+  })
+  ns.modules.Register({
+    name = "gone",
+    job = "x",
+    init = function() end,
+    IsAvailable = function()
+      return false
+    end,
+    BuildPanel = function(page)
+      builtPages[#builtPages + 1] = page
+    end,
+  })
+  ns.settings.Init()
+  check("unavailable modules get no page", #subcats == 1 and subcats[1].name == "here" and #builtPages == 1)
+  _G.Settings, _G.SettingsPanel, _G.CreateSettingsListSectionHeaderInitializer = nil, nil, nil
+end
+
 -- Slash.lua: short and long forms, bare opens settings, the rest is help
 do
   local ns = loadCore()
@@ -670,7 +835,9 @@ do
   )
   local keys = {}
   for _, row in ipairs(gear.OPTIONS) do
-    keys[row.key] = true
+    if type(row.key) == "string" then
+      keys[row.key] = true
+    end
   end
   check(
     "forever options present",
@@ -884,6 +1051,23 @@ do
   check(
     "equip sound dropdown offers off and the chimes",
     sounds[1].value == "0" and sounds[2].value == "878" and #sounds == 4
+  )
+  local equipRow
+  for _, row in ipairs(gear.OPTIONS) do
+    if row.key == "equipSound" then
+      equipRow = row
+    end
+  end
+  check(
+    "equip sound row declares its choices as data",
+    equipRow ~= nil and equipRow.choices ~= nil and #equipRow.choices == 4 and equipRow.choices[1].value == "0"
+  )
+  check(
+    "gear groups its rows under headers",
+    w.headers[3] == "Announcements"
+      and w.headers[4] == "Equipping"
+      and w.headers[5] == "Feedback"
+      and w.headers[6] == "Character sheet"
   )
   -- The enabled row's callback unregisters events when switched off.
   local enabledSetting
@@ -1334,7 +1518,9 @@ do
   )
   local keys = {}
   for _, row in ipairs(xp.OPTIONS) do
-    keys[row.key] = true
+    if type(row.key) == "string" then
+      keys[row.key] = true
+    end
   end
   check(
     "xp options present",
@@ -1779,6 +1965,10 @@ do
     "panel leads with the job and the window",
     headers[1] == xp.descriptor.job and headers[2] == "Rate window: trailing 10 minutes, forecast 15"
   )
+  check(
+    "xp groups its rows under headers",
+    headers[3] == "Display" and headers[4] == "Reputation" and headers[5] == "Position"
+  )
   local enabledSetting
   for _, s in ipairs(registered) do
     if s.key == "enabled" then
@@ -2047,7 +2237,9 @@ do
   )
   local keys = {}
   for _, row in ipairs(vendor.OPTIONS) do
-    keys[#keys + 1] = row.key
+    if type(row.key) == "string" then
+      keys[#keys + 1] = row.key
+    end
   end
   check(
     "vendor options present in order",
@@ -2360,6 +2552,12 @@ do
     table.concat(keys, ",") == "enabled,sellJunk,autoRepair,guildFunds,audit,tooltipPrice"
   )
   check("panel leads with the job", headers[1] == vendor.descriptor.job)
+  check(
+    "vendor groups its rows under headers",
+    headers[2] == "Sells poor quality only, repairs all, each visit announced"
+      and headers[3] == "At the merchant"
+      and headers[4] == "Reporting"
+  )
   local enabledSetting
   for _, s in ipairs(registered) do
     if s.key == "enabled" then

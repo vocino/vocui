@@ -37,8 +37,12 @@ vendor.OPTIONS = {
   {
     key = "enabled",
     kind = "checkbox",
-    label = "Enabled",
+    label = "Sell and repair at vendors",
     tooltip = "Sell junk and repair automatically at vendors",
+  },
+  {
+    kind = "header",
+    label = "At the merchant",
   },
   {
     key = "sellJunk",
@@ -57,6 +61,10 @@ vendor.OPTIONS = {
     kind = "checkbox",
     label = "Guild funds first",
     tooltip = "Use guild repairs when allowed before personal funds",
+  },
+  {
+    kind = "header",
+    label = "Reporting",
   },
   {
     key = "audit",

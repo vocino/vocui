@@ -12,7 +12,8 @@ local category
 
 -- A section header is the one plain-text element the vertical layout
 -- offers. Guarded: the panel is complete without it. Modules call this
--- on their own page so a page leads with what the module does.
+-- on their own page so a page leads with what the module does; header
+-- rows in a module's OPTIONS table come through here too.
 function settings.AddNote(page, text)
   if type(page) ~= "table" then
     return
@@ -36,13 +37,74 @@ local function note(text)
   settings.AddNote(category, text)
 end
 
+-- A dropdown's options function from declarative choices data
+-- ({{ value, label, tooltip }}), so modules declare data and the core
+-- owns the one container builder (Principles #11).
+function settings.DropdownOptions(choices)
+  return function()
+    if type(Settings) ~= "table" or type(Settings.CreateControlTextContainer) ~= "function" then
+      return {}
+    end
+    local container = Settings.CreateControlTextContainer()
+    for _, choice in ipairs(choices or {}) do
+      if type(choice) == "table" then
+        container:Add(choice.value, choice.label, choice.tooltip or "")
+      end
+    end
+    return container:GetData()
+  end
+end
+
+-- One row's native control for the value the row wants (wiki/Craft.md,
+-- "Settings panels"): a checkbox for a yes-or-no, a slider with
+-- min/max/step for a number in a range, a dropdown for one choice
+-- among named choices. Dropdown rows carry their options function, or
+-- declare choices data the core turns into one. Anything else falls
+-- back to a checkbox. A row whose factory is missing builds nothing,
+-- never an error. Returns the initializer, or nil.
+local function buildInitializer(page, setting, row)
+  if type(Settings) ~= "table" then
+    return nil
+  end
+  if row.kind == "slider" then
+    local step = row.step
+    if type(step) ~= "number" then
+      step = nil
+    end
+    if
+      type(row.min) == "number"
+      and type(row.max) == "number"
+      and type(Settings.CreateSlider) == "function"
+      and type(Settings.CreateSliderOptions) == "function"
+    then
+      return Settings.CreateSlider(page, setting, Settings.CreateSliderOptions(row.min, row.max, step), row.tooltip)
+    end
+    return nil
+  end
+  if row.kind == "dropdown" then
+    local options = row.options
+    if type(options) ~= "function" and type(row.choices) == "table" then
+      options = settings.DropdownOptions(row.choices)
+    end
+    if type(options) == "function" and type(Settings.CreateDropdown) == "function" then
+      return Settings.CreateDropdown(page, setting, options, row.tooltip)
+    end
+    return nil
+  end
+  if type(Settings.CreateCheckbox) == "function" then
+    return Settings.CreateCheckbox(page, setting, row.tooltip)
+  end
+  return nil
+end
+
 -- Declarative option rows, rendered through the native Settings
 -- controls (Principles #1: settings are data, never hand-built frames
 -- per option). A module hands its OPTIONS table; the core registers
 -- each row, wires the value-changed callback so a change applies at
 -- once with no reload, and gates child rows on the enable toggle
--- (disabled, never hidden). Dropdown rows carry their options
--- function. Returns how many rows were built.
+-- (disabled, never hidden). Header rows ({ kind = "header", label })
+-- are plain section labels and register nothing. Returns how many
+-- control rows were built.
 function settings.BuildPage(page, tag, state, defaults, rows, isEnabled, onChange)
   if type(page) ~= "table" then
     return 0
@@ -56,7 +118,9 @@ function settings.BuildPage(page, tag, state, defaults, rows, isEnabled, onChang
   local built = 0
   local parentInit = nil
   for _, row in ipairs(rows) do
-    if type(row) == "table" and type(row.key) == "string" then
+    if type(row) == "table" and row.kind == "header" and type(row.label) == "string" then
+      settings.AddNote(page, row.label)
+    elseif type(row.key) == "string" then
       local setting = Settings.RegisterAddOnSetting(
         page,
         tag .. row.key,
@@ -66,12 +130,7 @@ function settings.BuildPage(page, tag, state, defaults, rows, isEnabled, onChang
         row.label,
         defaults[row.key]
       )
-      local initializer
-      if row.kind == "dropdown" and type(row.options) == "function" then
-        initializer = Settings.CreateDropdown(page, setting, row.options, row.tooltip)
-      else
-        initializer = Settings.CreateCheckbox(page, setting, row.tooltip)
-      end
+      local initializer = buildInitializer(page, setting, row)
       if setting and type(setting.SetValueChangedCallback) == "function" and type(onChange) == "function" then
         local key = row.key
         setting:SetValueChangedCallback(function()
@@ -89,7 +148,9 @@ function settings.BuildPage(page, tag, state, defaults, rows, isEnabled, onChang
         -- Disabled, never hidden, while the module is off.
         pcall(initializer.SetParentInitializer, initializer, parentInit, isEnabled)
       end
-      built = built + 1
+      if initializer then
+        built = built + 1
+      end
     end
   end
   return built
@@ -140,6 +201,28 @@ function settings.BuildModulePage(mod, page, extra)
   return built
 end
 
+-- A module that cannot work here gets no page: unavailable is a
+-- designed state, hidden rather than shown broken (Principles #12,
+-- Craft #4). Mirrors modules.InitAll, which skips the same modules; a
+-- broken check fails open here because InitAll already reported it.
+local function panelWanted(mod)
+  if type(mod) ~= "table" then
+    return false
+  end
+  local check = mod.IsAvailable
+  if type(check) ~= "function" and type(mod.descriptor) == "table" then
+    check = mod.descriptor.IsAvailable
+  end
+  if type(check) ~= "function" then
+    return true
+  end
+  local ok, available = pcall(check)
+  if not ok then
+    return true
+  end
+  return available and true or false
+end
+
 -- The module's own page under the VocUI parent: a vertical-layout
 -- subcategory named for the module's job (wiki/Principles.md #24). When
 -- the subcategory API is missing the module builds on the parent page
@@ -178,7 +261,7 @@ function settings.Init()
   Settings.RegisterAddOnCategory(category)
   local built = 0
   for _, mod in ipairs(allModules()) do
-    if type(mod.BuildPanel) == "function" then
+    if type(mod.BuildPanel) == "function" and panelWanted(mod) then
       local ok, err = pcall(mod.BuildPanel, modulePage(mod))
       if ok then
         built = built + 1

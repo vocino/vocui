@@ -35,23 +35,6 @@ function gear.RowChanged(key)
   end
 end
 
-function gear.EquipSoundOptions()
-  local container = Settings.CreateControlTextContainer()
-  container:Add("0", "Off", "No sound when equipping")
-  for _, snd in ipairs(gear.EQUIP_SOUNDS) do
-    container:Add(snd.id, snd.label, "")
-  end
-  return container:GetData()
-end
-
--- Dropdown rows resolve their options here, at load: the OPTIONS table
--- stays pure data in the descriptor file.
-for _, row in ipairs(gear.OPTIONS) do
-  if row.kind == "dropdown" and row.key == "equipSound" then
-    row.options = gear.EquipSoundOptions
-  end
-end
-
 function gear.BuildPanelImpl(page)
   ns.settings.BuildModulePage(gear, page, "Upgrade source: built-in item level")
 end

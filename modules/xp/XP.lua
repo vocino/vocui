@@ -68,6 +68,10 @@ xp.OPTIONS = {
     tooltip = "Track XP per hour and time to level, reputation at max level",
   },
   {
+    kind = "header",
+    label = "Display",
+  },
+  {
     key = "announce",
     kind = "checkbox",
     label = "Chat announcements",
@@ -80,6 +84,10 @@ xp.OPTIONS = {
     tooltip = "Hide Blizzard's status bar cluster while the XP bar shows",
   },
   {
+    kind = "header",
+    label = "Reputation",
+  },
+  {
     key = "repMode",
     kind = "checkbox",
     label = "Track reputation at max level",
@@ -90,6 +98,10 @@ xp.OPTIONS = {
     kind = "checkbox",
     label = "Follow latest reputation gains",
     tooltip = "Track the most recently earned faction, not the watched one",
+  },
+  {
+    kind = "header",
+    label = "Position",
   },
   {
     key = "locked",

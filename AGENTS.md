@@ -142,7 +142,9 @@ step does not fit the module, extend this list in the same commit.
 2. Add the module's files to `VocUI.toc`, after the core block, in
    alphabetical order by folder, descriptor first within the folder.
 3. Give the module its settings page through the core settings
-   service (see Settings tree). Declare its options as data.
+   service (see Settings tree). Declare its options as data,
+   conforming to the settings standard (wiki/Craft.md, "Settings
+   panels") from landing.
 4. Keep its state under `VocUIDB.modules.<job>` and nowhere else.
 5. Add headless tests for its logic in `tests/`; run
    `lua tests/run.lua`, `luacheck .`, and
