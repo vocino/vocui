@@ -1,0 +1,6 @@
+# VocUI pins Lua to CRLF so every checkout agrees with
+# .stylua.toml (line_endings = "Windows"). Without this, Linux
+# checkouts land LF and the format gate fails there while passing
+# on Windows. Shell scripts stay out: GNU bash reads them, and it
+# wants the LF it already gets on Linux.
+*.lua text eol=crlf
