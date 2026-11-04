@@ -103,17 +103,6 @@ gear.RIVALS = { Outfitter = "outfit swaps", ItemRack = "gear-set swaps" }
 gear.rivalWarned = {}
 gear.rivalStoodDown = false
 
-function gear.AddonLoaded(addonName)
-  if type(C_AddOns) ~= "table" then
-    return false
-  end
-  if type(C_AddOns.IsAddOnLoaded) ~= "function" then
-    return false
-  end
-  local ok, loaded = pcall(C_AddOns.IsAddOnLoaded, addonName)
-  return ok and loaded == true
-end
-
 function gear.CheckRival(addonName)
   if type(addonName) ~= "string" then
     return
@@ -138,27 +127,10 @@ end
 
 function gear.CheckRivalsLoaded()
   for rivalName in pairs(gear.RIVALS) do
-    if gear.AddonLoaded(rivalName) then
+    if ns.guests.IsLoaded(rivalName) then
       gear.CheckRival(rivalName)
     end
   end
-end
-
--- Combat as the client enforces it, not just the UI lockdown: on pull
--- frames the unit already reads in-combat while InCombatLockdown still
--- returns false, and the client answers an equip in that window with
--- ADDON_ACTION_FORBIDDEN. Presence-gated and fail-open.
-function gear.InCombat()
-  if InCombatLockdown() then
-    return true
-  end
-  if type(UnitAffectingCombat) == "function" then
-    local ok, fighting = pcall(UnitAffectingCombat, "player")
-    if ok and fighting then
-      return true
-    end
-  end
-  return false
 end
 
 -- Restricted states where the client forbids equipment changes without
@@ -206,7 +178,7 @@ function gear.Equip(link, ev, slotID)
     end
     return false
   end
-  if gear.InCombat() then
+  if ns.combat() then
     return false
   end
   if gear.Restricted() then
@@ -275,7 +247,7 @@ function gear.ScanInner()
   if gear.rivalStoodDown then
     return
   end
-  if gear.InCombat() then
+  if ns.combat() then
     return
   end
   if gear.Restricted() then
@@ -329,14 +301,13 @@ function gear.ScanInner()
       end
     end
   else
-    for bag = 0, NUM_BAG_SLOTS do
-      for slot = 1, C_Container.GetContainerNumSlots(bag) do
-        if scanOne(C_Container.GetContainerItemLink(bag, slot)) then
-          gear.scanning = false
-          return
-        end
+    ns.inventory.EachSlot(function(_, _, _, link)
+      if scanOne(link) then
+        gear.scanning = false
+        return true
       end
-    end
+      return false
+    end)
   end
   gear.scanning = false
   -- Items nobody could answer yet get a few retries for slow caches,

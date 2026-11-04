@@ -11,7 +11,7 @@ gear.panelBuilt = false
 -- What a row does when its value changes, beyond the store write the
 -- Settings control already made. Behavior rows rescan; the enable row
 -- also registers or unregisters the module's events.
-local function rowChanged(key)
+function gear.RowChanged(key)
   if key == "enabled" then
     if gear.ApplyEnabledImpl then
       gear.ApplyEnabledImpl()
@@ -53,26 +53,5 @@ for _, row in ipairs(gear.OPTIONS) do
 end
 
 function gear.BuildPanelImpl(page)
-  if gear.panelBuilt then
-    return
-  end
-  if type(Settings) ~= "table" then
-    return
-  end
-  if type(Settings.RegisterAddOnSetting) ~= "function" then
-    return
-  end
-  if type(ns.db) ~= "table" then
-    return
-  end
-  -- Information order: what the module does first, the deciding source
-  -- second, configuration last.
-  ns.settings.AddNote(page, gear.descriptor.job)
-  ns.settings.AddNote(page, "Upgrade source: built-in item level")
-  ns.settings.BuildPage(page, "VocUI_gear_", gear.opts(), gear.defaults, gear.OPTIONS, function()
-    return gear.opts().enabled
-  end, function(key)
-    rowChanged(key)
-  end)
-  gear.panelBuilt = true
+  ns.settings.BuildModulePage(gear, page, "Upgrade source: built-in item level")
 end

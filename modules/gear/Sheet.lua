@@ -191,7 +191,7 @@ function gear.EnsureSheetImpl()
       COLORS.text[3],
       true
     )
-    if gear.InCombat() then
+    if ns.combat() then
       GameTooltip:AddLine("does not work in combat", COLORS.red[1], COLORS.red[2], COLORS.red[3], true)
     end
     GameTooltip:Show()

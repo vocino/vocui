@@ -18,8 +18,10 @@ local CORE = {
   "core/Palette.lua",
   "core/Chat.lua",
   "core/Sounds.lua",
+  "core/Combat.lua",
   "core/Config.lua",
   "core/Inventory.lua",
+  "core/Guests.lua",
   "core/Prices.lua",
   "core/Modules.lua",
   "core/Settings.lua",
@@ -1029,6 +1031,94 @@ do
   check("no syndicator falls back to blizzard", ns.inventory.BagLinks() == nil)
 end
 
+-- Shared combat, guest, and bag-walk helpers: one definition in core,
+-- every module delegates instead of rebuilding.
+do
+  local ns = loadCore()
+  check("combat helper exists", type(ns.combat) == "function")
+  check("guest helper exists", type(ns.guests) == "table" and type(ns.guests.IsLoaded) == "function")
+  check(
+    "bag walker exists",
+    type(ns.inventory.EachSlot) == "function" and type(ns.settings.BuildModulePage) == "function"
+  )
+end
+
+-- Combat reads the client, not just the UI: on pull frames the unit
+-- already fights while the lockdown still reads clear.
+do
+  local ns = loadCore()
+  _G.InCombatLockdown = function()
+    return true
+  end
+  _G.UnitAffectingCombat = nil
+  check("lockdown reads busy", ns.combat() == true)
+  _G.InCombatLockdown = function()
+    return false
+  end
+  _G.UnitAffectingCombat = function()
+    return true
+  end
+  check("pull frames read busy", ns.combat() == true)
+  _G.UnitAffectingCombat = function()
+    return false
+  end
+  check("peace reads clear", ns.combat() == false)
+  _G.InCombatLockdown, _G.UnitAffectingCombat = nil, nil
+  check("missing api never reads busy", ns.combat() == false)
+end
+
+-- Guest presence: loaded addons read loaded, anything else does not.
+do
+  local ns = loadCore()
+  _G.C_AddOns = {
+    IsAddOnLoaded = function(name)
+      return name == "There"
+    end,
+  }
+  check("loaded guests read loaded", ns.guests.IsLoaded("There") == true)
+  check("absent guests read clear", ns.guests.IsLoaded("Away") == false)
+  check("junk names read clear", ns.guests.IsLoaded(nil) == false)
+  _G.C_AddOns = nil
+  check("missing api never reads loaded", ns.guests.IsLoaded("There") == false)
+end
+
+-- The fallback bag walk: every readable slot once, early stop honored.
+do
+  local ns = loadCore()
+  local seen = {}
+  _G.NUM_BAG_SLOTS = 1
+  _G.C_Container = {
+    GetContainerNumSlots = function(bag)
+      return bag == 0 and 2 or 1
+    end,
+    GetContainerItemInfo = function(bag, slot)
+      if bag == 1 then
+        error("broken slot")
+      end
+      return { quality = 0, hyperlink = "s" .. bag .. slot }
+    end,
+    GetContainerItemLink = function()
+      return nil
+    end,
+  }
+  ns.inventory.EachSlot(function(bag, slot, info, link)
+    seen[#seen + 1] = bag .. slot .. (info and info.hyperlink or "-") .. (link or "-")
+  end)
+  check("walk reads every slot once", table.concat(seen, ",") == "01s01s01,02s02s02")
+  check("broken slots yield nothing", #seen == 2)
+  local stopped = 0
+  ns.inventory.EachSlot(function()
+    stopped = stopped + 1
+    return true
+  end)
+  check("early stop ends the walk", stopped == 1)
+  _G.C_Container = nil
+  check("missing containers walk nowhere", ns.inventory.EachSlot(function()
+    return true
+  end) == nil)
+  _G.NUM_BAG_SLOTS = nil
+end
+
 -- Gear through Syndicator: the scan reads bag links from the cache,
 -- and the why lines carry Auctionator value.
 do
@@ -1988,12 +2078,22 @@ do
       IsReady = function()
         return true
       end,
-      GetCurrentInventory = function()
+      IsBagEventPending = function()
+        return false
+      end,
+      GetCurrentCharacter = function()
+        return "A-Realm"
+      end,
+      GetByCharacterFullName = function()
         return {
-          { itemLink = "item:1" },
-          { itemLink = "item:2" },
-          { itemLink = "item:3" },
-          { itemLink = "item:9" },
+          bags = {
+            [1] = {
+              { itemLink = "item:1" },
+              { itemLink = "item:2" },
+              { itemLink = "item:3" },
+              { itemLink = "item:9" },
+            },
+          },
         }
       end,
     },

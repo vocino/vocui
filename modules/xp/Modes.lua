@@ -55,14 +55,6 @@ function xp.now()
   return 0
 end
 
--- Busy window: combat lockdown. A missing API never reads as busy.
-function xp.inCombat()
-  if type(InCombatLockdown) == "function" and InCombatLockdown() then
-    return true
-  end
-  return false
-end
-
 -- Report the pending burst when it is due: at least two gains, no new
 -- gains for SUMMARY_QUIET, and no longer busy. Called from refresh(),
 -- so no new timer and no new event: the 1s ticker bounds the delay.
@@ -71,7 +63,7 @@ local function flushSummary(now)
   if summaryAcc == nil or summaryAcc.count < 2 then
     return false
   end
-  if xp.inCombat() then
+  if ns.combat() then
     return false
   end
   if (now - summaryAcc.lastAt) < xp.SUMMARY_QUIET then
@@ -425,7 +417,7 @@ local function onRep(gainedID, updatedStanding, renownLevel)
           local stamp = xp.now()
           xp.addAward(rateTracker, stamp, award)
           xp.addAward(etaTracker, stamp, award)
-          summaryAcc = xp.noteSummaryGain(summaryAcc, stamp, "rep", repFactionID, snap.name, award, xp.inCombat())
+          summaryAcc = xp.noteSummaryGain(summaryAcc, stamp, "rep", repFactionID, snap.name, award, ns.combat())
         end
       end
       repBaseline = snap
@@ -451,7 +443,7 @@ local function onXP()
       local stamp = xp.now()
       xp.addAward(rateTracker, stamp, gained)
       xp.addAward(etaTracker, stamp, gained)
-      summaryAcc = xp.noteSummaryGain(summaryAcc, stamp, "xp", nil, nil, gained, xp.inCombat())
+      summaryAcc = xp.noteSummaryGain(summaryAcc, stamp, "xp", nil, nil, gained, ns.combat())
     end
   end
   baseline = snap
@@ -725,13 +717,9 @@ function xp.checkRivals()
   if not xp.opts().enabled or mode == "dormant" then
     return false
   end
-  if type(C_AddOns) ~= "table" or type(C_AddOns.IsAddOnLoaded) ~= "function" then
-    return false
-  end
   local hit = nil
   for _, addon in ipairs(xp.RIVALS) do
-    local ok, loaded = pcall(C_AddOns.IsAddOnLoaded, addon)
-    if ok and loaded then
+    if ns.guests.IsLoaded(addon) then
       hit = addon
       break
     end

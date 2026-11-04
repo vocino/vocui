@@ -95,6 +95,51 @@ function settings.BuildPage(page, tag, state, defaults, rows, isEnabled, onChang
   return built
 end
 
+-- A module's settings page through the same service every module
+-- shares: guards, the job note plus one context line, rows from the
+-- module's OPTIONS table, enable-gating, and the module's own
+-- RowChanged callback. The tag derives from the descriptor name so
+-- pages cannot collide. Modules keep their OPTIONS, their notes, and
+-- their RowChanged; this owns only the shape.
+function settings.BuildModulePage(mod, page, extra)
+  if type(mod) ~= "table" or type(mod.descriptor) ~= "table" then
+    return 0
+  end
+  if mod.panelBuilt then
+    return 0
+  end
+  if type(Settings) ~= "table" then
+    return 0
+  end
+  if type(Settings.RegisterAddOnSetting) ~= "function" then
+    return 0
+  end
+  if type(ns.db) ~= "table" then
+    return 0
+  end
+  ns.settings.AddNote(page, mod.descriptor.job)
+  if type(extra) == "string" then
+    ns.settings.AddNote(page, extra)
+  end
+  local built = ns.settings.BuildPage(
+    page,
+    "VocUI_" .. tostring(mod.descriptor.name) .. "_",
+    mod.opts(),
+    mod.defaults,
+    mod.OPTIONS,
+    function()
+      return mod.opts().enabled
+    end,
+    function(key)
+      if type(mod.RowChanged) == "function" then
+        mod.RowChanged(key)
+      end
+    end
+  )
+  mod.panelBuilt = true
+  return built
+end
+
 -- The module's own page under the VocUI parent: a vertical-layout
 -- subcategory named for the module's job (wiki/Principles.md #24). When
 -- the subcategory API is missing the module builds on the parent page

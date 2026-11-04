@@ -1,11 +1,10 @@
 local _, ns = ...
 local vendor = ns.vendor
 
--- Junk: poor quality (0) and nothing else, ever. The scan reads the
--- Syndicator settled cache first exactly like the gear module, else
--- walks Blizzard's containers itself; unknown quality is skipped,
--- never guessed. Guests are never requirements: a missing guest only
--- changes which read supplies the same answer.
+-- Junk: poor quality (0) and nothing else, ever. The scan walks the
+-- bags once through the shared inventory service; unknown quality is
+-- skipped, never guessed. Guests are never requirements: a missing
+-- guest only changes which read supplies the same answer.
 
 -- One junk line: the link and its vendor value in copper.
 local function junkLine(link)
@@ -26,82 +25,29 @@ local function junkLine(link)
   return { link = link, value = value }
 end
 
--- Junk through the guest cache: quality decides, the price service
--- only totals. A link whose quality never resolves is skipped.
-local function scanGuest()
-  if type(Syndicator) ~= "table" or type(Syndicator.API) ~= "table" then
-    return nil
-  end
-  local API = Syndicator.API
-  if type(API.IsReady) ~= "function" or type(API.GetCurrentInventory) ~= "function" then
-    return nil
-  end
-  local ready = API.IsReady()
-  if ready ~= true and ready ~= "ready" then
-    return nil
-  end
-  local ok, current = pcall(API.GetCurrentInventory, "player")
-  if not ok or type(current) ~= "table" then
-    return nil
-  end
-  local found = {}
-  for _, item in ipairs(current) do
-    if type(item) == "table" and type(item.itemLink) == "string" then
-      local line = junkLine(item.itemLink)
-      if line ~= nil then
-        found[#found + 1] = line
-      end
-    end
-  end
-  return found
-end
-
--- Junk through Blizzard's own containers: slot quality decides, the
--- link travels along for the audit lines. Bags run 0 through
--- NUM_BAG_SLOTS (backpack first); anything unreadable is skipped.
-local function scanWalk()
-  if type(C_Container) ~= "table" then
-    return {}
-  end
-  local C = C_Container
-  if
-    type(C.GetContainerNumSlots) ~= "function"
-    or type(C.GetContainerItemInfo) ~= "function"
-    or type(NUM_BAG_SLOTS) ~= "number"
-  then
-    return {}
-  end
-  local found = {}
-  for bag = 0, NUM_BAG_SLOTS do
-    local slots = C.GetContainerNumSlots(bag)
-    if type(slots) == "number" then
-      for slot = 1, slots do
-        local ok, info = pcall(C.GetContainerItemInfo, bag, slot)
-        if ok and type(info) == "table" and info.quality == 0 then
-          local link = info.hyperlink
-          if type(link) ~= "string" and type(C.GetContainerItemLink) == "function" then
-            local okLink, l = pcall(C.GetContainerItemLink, bag, slot)
-            if okLink then
-              link = l
-            end
-          end
-          if type(link) == "string" then
-            local value = ns.prices.VendorPrice(link)
-            if value == nil then
-              value = 0
-            end
-            found[#found + 1] = { link = link, value = value }
-          end
-        end
-      end
-    end
-  end
-  return found
-end
-
--- The junk list, guest cache first, Blizzard walk behind it.
+-- The junk list: one walk over the bags through the shared
+-- inventory service, which reads the guest bag index when one is
+-- settled and walks Blizzard's containers otherwise.
 function vendor.ScanJunk()
-  return scanGuest() or scanWalk()
+  local found = {}
+  local function collect(link)
+    local line = junkLine(link)
+    if line ~= nil then
+      found[#found + 1] = line
+    end
+  end
+  local links = ns.inventory.BagLinks()
+  if type(links) == "table" then
+    for _, link in ipairs(links) do
+      collect(link)
+    end
+    return found
+  end
+  ns.inventory.EachSlot(function(bag, slot, info, link)
+    collect(link)
+    return false
+  end)
+  return found
 end
 
 function vendor.JunkTotal(found)
@@ -184,7 +130,7 @@ function vendor.OnMerchant()
   if not vendor.opts().enabled then
     return
   end
-  if vendor.InCombat() then
+  if ns.combat() then
     return
   end
   local o = vendor.opts()

@@ -13,7 +13,7 @@ vendor.panelBuilt = false
 -- live at merchant time, so only the toggle and the tooltip row act:
 -- the toggle registers or unregisters the merchant event, and the
 -- tooltip row installs the hooks on first enable.
-local function rowChanged(key)
+function vendor.RowChanged(key)
   if key == "enabled" then
     if vendor.ApplyEnabledImpl then
       vendor.ApplyEnabledImpl()
@@ -26,26 +26,5 @@ local function rowChanged(key)
 end
 
 function vendor.BuildPanelImpl(page)
-  if vendor.panelBuilt then
-    return
-  end
-  if type(Settings) ~= "table" then
-    return
-  end
-  if type(Settings.RegisterAddOnSetting) ~= "function" then
-    return
-  end
-  if type(ns.db) ~= "table" then
-    return
-  end
-  -- Information order: what the module does first, the deciding
-  -- source second, configuration last.
-  ns.settings.AddNote(page, vendor.descriptor.job)
-  ns.settings.AddNote(page, "Sells poor quality only, repairs all, each visit announced")
-  ns.settings.BuildPage(page, "VocUI_vendor_", vendor.opts(), vendor.defaults, vendor.OPTIONS, function()
-    return vendor.opts().enabled
-  end, function(key)
-    rowChanged(key)
-  end)
-  vendor.panelBuilt = true
+  ns.settings.BuildModulePage(vendor, page, "Sells poor quality only, repairs all, each visit announced")
 end

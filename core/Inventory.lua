@@ -85,3 +85,50 @@ function inventory.BagLinks()
   end
   return links
 end
+
+-- The Blizzard bag walk modules fall back to when the guest cache
+-- cannot answer: bags 0 through NUM_BAG_SLOTS (backpack first),
+-- every slot, unreadable slots skipped silently. fn(bag, slot, info,
+-- link) runs per readable slot; returning true stops the walk early
+-- (one-equip-per-scan loops). All container reads are pcall-guarded;
+-- a broken walk yields nothing, never an error.
+function inventory.EachSlot(fn)
+  if type(fn) ~= "function" then
+    return
+  end
+  if type(C_Container) ~= "table" then
+    return
+  end
+  local C = C_Container
+  if type(C.GetContainerNumSlots) ~= "function" or type(NUM_BAG_SLOTS) ~= "number" then
+    return
+  end
+  local getInfo = type(C.GetContainerItemInfo) == "function" and C.GetContainerItemInfo or nil
+  local getLink = type(C.GetContainerItemLink) == "function" and C.GetContainerItemLink or nil
+  for bag = 0, NUM_BAG_SLOTS do
+    local okSlots, slots = pcall(C.GetContainerNumSlots, bag)
+    if okSlots and type(slots) == "number" then
+      for slot = 1, slots do
+        local info = nil
+        if getInfo then
+          local okInfo, got = pcall(getInfo, bag, slot)
+          if okInfo and type(got) == "table" then
+            info = got
+          end
+        end
+        local link = info ~= nil and info.hyperlink or nil
+        if type(link) ~= "string" and getLink then
+          local okLink, gotLink = pcall(getLink, bag, slot)
+          if okLink and type(gotLink) == "string" then
+            link = gotLink
+          end
+        end
+        if info ~= nil or link ~= nil then
+          if fn(bag, slot, info, link) then
+            return
+          end
+        end
+      end
+    end
+  end
+end

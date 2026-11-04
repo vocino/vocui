@@ -16,8 +16,10 @@
 core/Palette.lua
 core/Chat.lua
 core/Sounds.lua
+core/Combat.lua
 core/Config.lua
 core/Inventory.lua
+core/Guests.lua
 core/Prices.lua
 core/Modules.lua
 core/Settings.lua

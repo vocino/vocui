@@ -11,7 +11,7 @@ xp.panelBuilt = false
 -- What a row does when its value changes, beyond the store write the
 -- Settings control already made. Behavior rows rescan; the enable row
 -- also registers or unregisters the module's events.
-local function rowChanged(key)
+function xp.RowChanged(key)
   if key == "enabled" then
     if xp.ApplyEnabledImpl then
       xp.ApplyEnabledImpl()
@@ -36,26 +36,5 @@ local function rowChanged(key)
 end
 
 function xp.BuildPanelImpl(page)
-  if xp.panelBuilt then
-    return
-  end
-  if type(Settings) ~= "table" then
-    return
-  end
-  if type(Settings.RegisterAddOnSetting) ~= "function" then
-    return
-  end
-  if type(ns.db) ~= "table" then
-    return
-  end
-  -- Information order: what the module does first, the deciding source
-  -- second, configuration last.
-  ns.settings.AddNote(page, xp.descriptor.job)
-  ns.settings.AddNote(page, "Rate window: trailing 10 minutes, forecast 15")
-  ns.settings.BuildPage(page, "VocUI_xp_", xp.opts(), xp.defaults, xp.OPTIONS, function()
-    return xp.opts().enabled
-  end, function(key)
-    rowChanged(key)
-  end)
-  xp.panelBuilt = true
+  ns.settings.BuildModulePage(xp, page, "Rate window: trailing 10 minutes, forecast 15")
 end

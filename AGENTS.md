@@ -3,7 +3,7 @@
 ## Code Map
 
 - `VocUI.toc` - Forever client metadata (Interface 16001)
-- `core/` - loader, settings store, guest services (Syndicator inventory, Auctionator prices), palette, sounds, chat, slash
+- `core/` - loader, settings store and page builder, shared reads (combat, guest presence, bag walk), guest services (Syndicator inventory, Auctionator prices), palette, sounds, chat, slash
 - `modules/` - one folder per module, descriptor first (gear so far)
 - `tests/` - headless tests (`lua tests/run.lua`)
 - `wiki/` - the docs (ignored clone of `vocino/vocui.wiki.git`, the single source; see Wiki below)
@@ -129,7 +129,10 @@ Follow these steps in order, every time (Principles #25 in the wiki). If a
 step does not fit the module, extend this list in the same commit.
 
 1. Create `modules/<job>/` with the descriptor file first, then the
-   module's files. One job, statable in one sentence.
+   module's files. One job, statable in one sentence. Survey `core/`
+   before writing logic: a need another module already met lives in
+   a core service (Principles #11) — use it, and if the service does
+   not exist yet, extract it and migrate the older module to it.
 2. Add the module's files to `VocUI.toc`, after the core block, in
    alphabetical order by folder, descriptor first within the folder.
 3. Give the module its settings page through the core settings

@@ -30,14 +30,6 @@ function vendor.opts()
   return ns.config.Section(vendor.SECTION, vendor.defaults)
 end
 
--- Busy window: combat lockdown. A missing API never reads as busy.
-function vendor.InCombat()
-  if type(InCombatLockdown) == "function" and InCombatLockdown() then
-    return true
-  end
-  return false
-end
-
 -- Declarative option rows for the module's settings page (CRAFT:
 -- settings are data). Pause and reset have no meaning at a vendor
 -- visit, so they do not exist here at all.
