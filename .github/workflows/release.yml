@@ -1,0 +1,60 @@
+name: release
+
+# Tag-driven releases (Principles #22): pushing an annotated vX.Y.Z tag
+# ships the addon. Nothing else triggers this workflow.
+on:
+  push:
+    tags:
+      - "v[0-9]*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    # Token names are the packager's current ones (release.sh "Load
+    # secrets"). CF_API_TOKEN is empty until the CurseForge one-time
+    # setup in the Toolchain wiki page is done; the packager skips
+    # CurseForge while it is empty and still ships the GitHub release.
+    # GH_API_TOKEN gets the automatic GITHUB_TOKEN (read-write
+    # permission, so the packager can publish the release).
+    env:
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      GH_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Clone project
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history: the changelog is the commits since the previous tag
+
+      # Principles #20: no release ships red. Same gates as test.yml.
+      - name: install lua 5.1 and luacheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1 lua-check
+
+      - name: headless tests (Lua 5.1, the client's dialect)
+        run: lua5.1 tests/run.lua
+
+      - name: lint
+        run: luacheck .
+
+      - name: format check
+        run: |
+          cargo install stylua
+          stylua --check core modules tests
+
+      - name: lint with wowlua-ls (forever flavor)
+        run: |
+          curl -sSL -o /tmp/wowlua_ls https://github.com/TradeSkillMaster/wowlua-ls/releases/download/v0.35.0/wowlua_ls-x86_64-unknown-linux-gnu
+          chmod +x /tmp/wowlua_ls
+          /tmp/wowlua_ls check . --severity warning
+
+      - name: vocui checks
+        run: bash checks/run-all.sh .
+
+      - name: Package and release
+        uses: BigWigsMods/packager@v2
