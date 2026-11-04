@@ -1827,44 +1827,87 @@ do
   _G.GetXPExhaustion, _G.IsXPUserDisabled = nil, nil
 end
 
--- XP bonuses: detection shows, only rested is ever suggested
+-- XP bonuses: the registry reports its active and missing halves; rested
+-- and quest reach stay on the bar, never in the section
 do
   xpWorld()
   local ns = loadXP()
   local xp = ns.xp
-  check("no apis means no bonuses", #xp.bonusParts("xp") == 0)
+  check(
+    "registry holds the verified food buff",
+    #xp.REGISTRY == 1 and xp.REGISTRY[1].aura == 24870 and xp.REGISTRY[1].food == true
+  )
+  check("no apis means no active lines", #xp.bonusParts("xp") == 0)
   local missing = xp.missingParts("xp")
-  check("forever suggests only rested", #missing == 1 and missing[1] == "Rested (rest in town)")
+  check("missing names the source without a bag read", #missing == 1 and missing[1] == "Well Fed · kill XP (eat food)")
+  check("rep side keeps its own list", xp.bonusParts("rep", true)[1] == "Bonus rep gain")
   _G.GetXPExhaustion = function()
     return 100
   end
-  check("rested shows when active", xp.bonusParts("xp")[1] == "Rested" and #xp.missingParts("xp") == 0)
-  _G.C_PvP = {
-    IsWarModeDesired = function()
-      return true
-    end,
-    GetWarModeRewardBonus = function()
-      return 15
-    end,
-  }
-  check("lit war mode shows live", xp.bonusParts("xp")[1] == "+15% War Mode")
-  check("war mode is never suggested", #xp.missingParts("xp") == 0)
+  check("rested stays on the bar, not in the section", #xp.bonusParts("xp") == 0 and #xp.missingParts("xp") == 1)
   _G.C_UnitAuras = {
     GetPlayerAuraBySpellID = function(id)
-      if id == 46668 then
-        return {}
+      if id == 24870 then
+        return { expirationTime = 2500 }
       end
       return nil
     end,
   }
   local buffs = xp.bonusParts("xp")
-  check("present auras show", buffs[2] == "+10% WHEE!" and buffs[3] == "Rested")
+  check(
+    "active shows with its remaining time",
+    buffs[1] == "Well Fed · kill XP (25m left)" and #xp.missingParts("xp") == 0
+  )
+  _G.C_UnitAuras.GetPlayerAuraBySpellID = function(id)
+    if id == 24870 then
+      return {}
+    end
+    return nil
+  end
+  check("active without a clock reads no time", xp.bonusParts("xp")[1] == "Well Fed · kill XP")
   _G.IsInInstance = function()
     return true
   end
-  check("instances gate aura reads", xp.missingParts("xp")[1] == "Aura scan unavailable in instances")
-  check("rep bonuses narrow to rep buffs", xp.bonusParts("rep", true)[1] == "Bonus rep gain")
+  check(
+    "instances gate aura reads",
+    #xp.bonusParts("xp") == 0 and xp.missingParts("xp")[1] == "Aura scan unavailable in instances"
+  )
   _G.C_PvP, _G.C_UnitAuras, _G.IsInInstance, _G.GetXPExhaustion = nil, nil, nil, nil
+end
+
+-- XP bag hints: food in the bags flips the missing line; without a read
+-- the section still works and the hint stays off
+do
+  xpWorld()
+  local ns = loadXP()
+  local xp = ns.xp
+  check("no bag read means no hint", xp.missingParts("xp")[1] == "Well Fed · kill XP (eat food)")
+  _G.C_Item = {
+    GetItemInfoInstant = function(link)
+      if link == "food" then
+        return 1, "Consumable", "Food & Drink", "", 1, 0, 5
+      end
+      return 2, "Armor", "Cloth", "", 2, 4, 1
+    end,
+  }
+  ns.inventory.BagLinks = function()
+    return { "food", "notfood" }
+  end
+  check("food in bags flips the hint", xp.missingParts("xp")[1] == "Well Fed · kill XP (food in bags)")
+  check("bags change nothing active", #xp.bonusParts("xp") == 0)
+  ns.inventory.BagLinks = function()
+    return { "notfood" }
+  end
+  check("bags without food keep the plain reminder", xp.missingParts("xp")[1] == "Well Fed · kill XP (eat food)")
+  ns.inventory.BagLinks = function()
+    return nil
+  end
+  ns.inventory.EachSlot = function(fn)
+    fn(0, 1, {}, "food")
+  end
+  check("the core walk backs the guest cache", xp.missingParts("xp")[1] == "Well Fed · kill XP (food in bags)")
+  _G.C_Item = nil
+  check("no item api means no hint, never an error", xp.missingParts("xp")[1] == "Well Fed · kill XP (eat food)")
 end
 
 -- XP slash and toggle: every subcommand sounds and says, typos help

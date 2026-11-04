@@ -473,8 +473,18 @@ function xp.showRepTip(est, progress, watching)
 end
 
 -- Bonus and missing lines, shared by both tooltips. Red appears only
--- for state: nothing active is a state worth noticing.
+-- for state: nothing active is a state worth noticing. The leveling side
+-- is the bonuses section: one white header, then the registry's active
+-- lines in green and its missing lines dimmed. When the registry holds
+-- nothing verified the section does not render at all; the rep side keeps
+-- the list it already had.
 function xp.tipBonuses(mode, progress)
+  if mode ~= "rep" and #xp.REGISTRY == 0 then
+    return
+  end
+  if mode ~= "rep" then
+    GameTooltip:AddLine("Bonuses", ns.COLORS.text[1], ns.COLORS.text[2], ns.COLORS.text[3], true)
+  end
   local bonuses = xp.bonusParts(mode, progress and progress.bonus)
   if #bonuses == 0 then
     local none = mode == "rep" and "No rep bonus" or "No XP bonus"

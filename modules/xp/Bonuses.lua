@@ -1,32 +1,29 @@
 local _, ns = ...
 local xp = ns.xp
 
--- Bonus lines: what raises the gain right now, and what is missing.
--- On Forever only Rested is ever suggested: War Mode, Mentored, and
--- the event buffs are unconfirmed there, so the module shows them when
--- active but never recommends them. Detection stays ungated on every
--- client (a lit flag or a present aura is real anywhere); only the
--- suggestions gate. Regalia is retail-only and has no line here at
--- all. The Regalia set does not exist on Forever.
-
--- Fixed-value XP-buff auras by spell ID: WHEE! (Darkmoon carousel and
--- coaster), Darkmoon Top Hat (separate aura, same +10%), Grim Visage /
--- Unburdened (Hallow's End Wickerman, one per faction).
-xp.XP_BUFFS = {
-  { id = 46668, label = "+10% WHEE!", pct = 10 },
-  { id = 136583, label = "+10% Darkmoon Top Hat", pct = 10 },
-  { id = 24705, label = "+10% Grim Visage", pct = 10 },
-  { id = 95987, label = "+10% Unburdened", pct = 10 },
-}
-
--- Rep buffs, all +10%: the Faire pair, the Wickerman pair, and the
--- Pilgrim's Bounty Spirit of Sharing (rep-only).
-xp.REP_BUFFS = {
-  { id = 46668, label = "+10% WHEE!", pct = 10 },
-  { id = 136583, label = "+10% Darkmoon Top Hat", pct = 10 },
-  { id = 24705, label = "+10% Grim Visage", pct = 10 },
-  { id = 95987, label = "+10% Unburdened", pct = 10 },
-  { id = 61849, label = "+10% Spirit of Sharing", pct = 10 },
+-- Bonus registry: the effects on the Forever client that change kill-XP
+-- gain, one entry per effect. Each entry names the effect, what it grants,
+-- and where it comes from, in the player's terms, plus the aura that marks
+-- it live and how to spot its granting item in the bags. Only Forever-
+-- verified effects get entries: Well Fed is the first, the food buff that
+-- raises kill XP. A short registry that is right beats a long one that is
+-- guessed, so the retail guesses are gone outright: War Mode, Mentored,
+-- and the Faire and Wickerman auras are unconfirmed on Forever (spell
+-- 24705 is the stamina-regen Invocation on Era-line data, not Grim
+-- Visage), and Joyous Journeys is Era-excluded by Blizzard's own notice.
+-- Combat buffs stay out even when they share a source: Sayge's Faire
+-- fortunes are damage and resistance, not XP. Eating does not feed rested
+-- on Era-line data (Food restores health, Well Fed adds stamina and
+-- spirit, rested accrues in rest areas), so no bonus touches rested; the
+-- bar's own reach lines already report it.
+xp.REGISTRY = {
+  {
+    aura = 24870, -- Well Fed, the eat-triggered food aura (Wowhead Era lead: classic spell 24870)
+    label = "Well Fed",
+    grant = "kill XP",
+    source = "food",
+    food = true, -- any food item grants it; the bag hint looks for food, not one item
+  },
 }
 
 function xp.playerAura(spellID)
@@ -43,62 +40,87 @@ function xp.hasAura(spellID)
   return xp.playerAura(spellID) ~= nil
 end
 
-function xp.warMode()
-  return type(C_PvP) == "table" and type(C_PvP.IsWarModeDesired) == "function" and C_PvP.IsWarModeDesired()
+-- Remaining time on a live aura, in seconds, or nil when the client does
+-- not report one. Blizzard's own BuffFrame reads auraData.expirationTime
+-- against GetTime() the same way (forever branch, BuffFrame.lua); a
+-- missing aura, a missing field, a missing clock, or an expired stamp all
+-- read no time, never an error.
+function xp.auraTimeLeft(spellID)
+  local aura = xp.playerAura(spellID)
+  if type(aura) ~= "table" then
+    return nil
+  end
+  if type(aura.expirationTime) ~= "number" or aura.expirationTime <= 0 then
+    return nil
+  end
+  if type(GetTime) ~= "function" then
+    return nil
+  end
+  local left = aura.expirationTime - GetTime()
+  if type(left) ~= "number" or left <= 0 then
+    return nil
+  end
+  return left
 end
 
--- The Enlisted buff starts at +10% but a Call to Arms for the
--- player's faction raises it, so read the live value instead of
--- hardcoding the base.
-function xp.warModeOffered()
-  local pct = 10
-  if type(C_PvP) == "table" and type(C_PvP.GetWarModeRewardBonus) == "function" then
-    local v = C_PvP.GetWarModeRewardBonus()
-    if type(v) == "number" and v >= 1 and v <= 100 then
-      pct = v
+-- Food in the player's bags, through the core's inventory service and its
+-- guests: the guest cache first (it already walked the bags for Baganator),
+-- else the core's Blizzard walk, the same order the gear module reads. No
+-- bag walk of our own. Without either source the hint simply stays off.
+-- Consumable class 0, Food & Drink subclass 5, both from the forever
+-- branch's own ItemConstantsDocumentation; GetItemInfoInstant is the
+-- ledger-verified read.
+xp.FOOD_CLASS = 0
+xp.FOOD_SUBCLASS = 5
+
+local function isFoodLink(link)
+  if type(link) ~= "string" then
+    return false
+  end
+  if type(C_Item) ~= "table" or type(C_Item.GetItemInfoInstant) ~= "function" then
+    return false
+  end
+  local ok, _, _, _, _, _, classID, subClassID = pcall(C_Item.GetItemInfoInstant, link)
+  return ok and classID == xp.FOOD_CLASS and subClassID == xp.FOOD_SUBCLASS
+end
+
+function xp.foodInBags()
+  local inv = ns.inventory
+  if type(inv) ~= "table" then
+    return false
+  end
+  if type(inv.BagLinks) == "function" then
+    local links = inv.BagLinks()
+    if type(links) == "table" then
+      for _, link in ipairs(links) do
+        if isFoodLink(link) then
+          return true
+        end
+      end
+      return false
     end
   end
-  return pct
-end
-
-function xp.warModePct()
-  if not xp.warMode() then
-    return nil
+  local found = false
+  if type(inv.EachSlot) == "function" then
+    inv.EachSlot(function(_, _, _, link)
+      if isFoodLink(link) then
+        found = true
+        return true
+      end
+      return false
+    end)
   end
-  return xp.warModeOffered()
-end
-
--- Warband Mentored Leveling scales 5-25% with max-level characters;
--- the aura's first effect point carries the current value.
-xp.MENTORED_ID = 430191
-
-function xp.mentoredBonus()
-  local aura = xp.playerAura(xp.MENTORED_ID)
-  if not aura then
-    return nil
-  end
-  local pct = aura.points and aura.points[1]
-  if type(pct) == "number" and pct >= 1 and pct <= 100 then
-    return ("+%d%% Warband Mentored"):format(pct), pct
-  end
-  return "Warband Mentored", nil
+  return found
 end
 
 -- Aura reads go blind in instances: the API returns nil there for
--- present world-granted buffs, so both lists gate aura-derived lines
--- on this and say so instead of false absence.
+-- present world-granted buffs, so the registry scan gates on this and
+-- says so instead of false absence.
 function xp.inInstance()
   if type(IsInInstance) ~= "function" then
     return false
   end
   return IsInInstance() == true
-end
-
-function xp.rested()
-  if type(GetXPExhaustion) ~= "function" then
-    return false
-  end
-  return GetXPExhaustion() ~= nil
 end
 
 -- Highest value first; lines without a number trail in insertion
@@ -121,8 +143,20 @@ local function bonusLabels(parts)
   return labels
 end
 
--- Bonus lines, highest value first. Lines without a number (Rested,
--- an unreadable Mentored value) trail in their usual order.
+-- Rep buffs, unchanged: reputation bonuses at max level are outside this
+-- extension's scope, so the rep side keeps the list it already had.
+xp.REP_BUFFS = {
+  { id = 46668, label = "+10% WHEE!", pct = 10 },
+  { id = 136583, label = "+10% Darkmoon Top Hat", pct = 10 },
+  { id = 24705, label = "+10% Grim Visage", pct = 10 },
+  { id = 95987, label = "+10% Unburdened", pct = 10 },
+  { id = 61849, label = "+10% Spirit of Sharing", pct = 10 },
+}
+
+-- Bonus lines, highest value first. Leveling lines come from the registry
+-- only: one line per live effect, with its remaining time when the client
+-- reports one. The bar already shows rested reach, so Rested has no line
+-- here; effects the client cannot confirm have no entry at all.
 function xp.bonusParts(mode, repBonus)
   local parts = {}
   local function add(pct, label)
@@ -140,32 +174,26 @@ function xp.bonusParts(mode, repBonus)
     end
     return bonusLabels(parts)
   end
-  local wm = xp.warModePct()
-  if wm then
-    add(wm, ("+%d%% War Mode"):format(wm))
-  end
-  local restricted = xp.inInstance()
-  if not restricted then
-    local mentored, mentoredPct = xp.mentoredBonus()
-    if mentored then
-      add(mentoredPct, mentored)
-    end
-    for _, buff in ipairs(xp.XP_BUFFS) do
-      if xp.hasAura(buff.id) then
-        add(buff.pct, buff.label)
+  if not xp.inInstance() then
+    for _, entry in ipairs(xp.REGISTRY) do
+      if xp.hasAura(entry.aura) then
+        local left = xp.auraTimeLeft(entry.aura)
+        if left then
+          add(nil, entry.label .. " · " .. entry.grant .. " (" .. xp.formatEta(left) .. " left)")
+        else
+          add(nil, entry.label .. " · " .. entry.grant)
+        end
       end
     end
-  end
-  if xp.rested() then
-    add(nil, "Rested")
   end
   return bonusLabels(parts)
 end
 
--- Buffs the player could be running but isn't: each names its value
--- and a short how-to. On Forever only Rested is recommended, so the
--- missing list holds just that; a lit War Mode flag or a present aura
--- still shows above, it is only never suggested.
+-- The missing half of the registry: one dimmed reminder per effect that
+-- is not live, naming where it comes from, with the in-bags hint when the
+-- granting food sits in the player's bags. No rested line here either;
+-- the bar already answers that. In instances the aura scan goes blind, so
+-- the scan line replaces the list instead of guessing absence.
 function xp.missingParts(mode)
   local parts = {}
   local function add(pct, label)
@@ -177,11 +205,24 @@ function xp.missingParts(mode)
     end
     return bonusLabels(parts)
   end
-  if not xp.rested() then
-    add(nil, "Rested (rest in town)")
-  end
   if xp.inInstance() then
     add(nil, "Aura scan unavailable in instances")
+    return bonusLabels(parts)
+  end
+  local bagged = nil
+  for _, entry in ipairs(xp.REGISTRY) do
+    if not xp.hasAura(entry.aura) then
+      local hint = "eat " .. entry.source
+      if entry.food then
+        if bagged == nil then
+          bagged = xp.foodInBags()
+        end
+        if bagged then
+          hint = entry.source .. " in bags"
+        end
+      end
+      add(nil, entry.label .. " · " .. entry.grant .. " (" .. hint .. ")")
+    end
   end
   return bonusLabels(parts)
 end

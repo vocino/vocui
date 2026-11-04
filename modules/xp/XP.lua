@@ -8,9 +8,11 @@ ns.xp = xp
 -- at max level the same bar follows reputation instead. Only the
 -- Forever behavior came across: the Regalia set is retail-only and does
 -- not exist here, so it has no line; War Mode, Mentored, and the event
--- buffs are unconfirmed on Forever, so a lit one shows but none is
--- ever suggested. Detection stays presence-gated throughout: a missing
--- API means a missing overlay, never an error.
+-- buffs are unconfirmed on Forever, so they have no registry entry
+-- at all. The tooltip's bonuses section reports the registry's active
+-- and missing halves while leveling; the bar's own reach lines keep
+-- reporting rested and quest XP. Detection stays presence-gated
+-- throughout: a missing API means a missing overlay, never an error.
 
 xp.SECTION = "modules.xp"
 
