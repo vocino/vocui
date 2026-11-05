@@ -907,6 +907,41 @@ do
   check("post-40 leveling armor refused", gear.Evaluate("leather").upgrade == false)
 end
 
+-- Gear evaluate: relics, thrown, and never-gear on the ranged slot
+do
+  local w = gearWorld()
+  local ns = loadGear()
+  ns.db = {}
+  local gear = ns.gear
+  -- Relics and thrown share the ranged slot (slot 18).
+  check("relic home is the ranged slot", gear.HomeSlot("INVTYPE_RELIC") == 18)
+  check("thrown home is the ranged slot", gear.HomeSlot("INVTYPE_THROWN") == 18)
+  -- A paladin's libram upgrades; a hunter's does not.
+  addItem(w, "libram", { equipLoc = "INVTYPE_RELIC", ilvl = 20, classID = 4, subclassID = 7 })
+  addItem(w, "oldlibram", { equipLoc = "INVTYPE_RELIC", ilvl = 10, classID = 4, subclassID = 7 })
+  w.classKey = "PALADIN"
+  w.equipped[18] = "oldlibram"
+  check("relic upgrades for its class", gear.Evaluate("libram").upgrade == true)
+  w.classKey = "HUNTER"
+  check("relic refused for other classes", gear.Evaluate("libram").upgrade == false)
+  -- Thrown: a rogue's upgrade, a hunter's refusal.
+  addItem(w, "axe", { equipLoc = "INVTYPE_THROWN", ilvl = 20, classID = 2, subclassID = 16 })
+  addItem(w, "oldaxe", { equipLoc = "INVTYPE_THROWN", ilvl = 10, classID = 2, subclassID = 16 })
+  w.equipped[18] = "oldaxe"
+  w.classKey = "ROGUE"
+  check("thrown upgrades for rogues", gear.Evaluate("axe").upgrade == true)
+  w.classKey = "HUNTER"
+  check("thrown refused for hunters", gear.Evaluate("axe").upgrade == false)
+  -- Bags and ammo are never upgrades, and say so plainly.
+  addItem(w, "bigbag", { equipLoc = "INVTYPE_BAG" })
+  addItem(w, "ammo", { equipLoc = "INVTYPE_AMMO" })
+  local bagEv = gear.Evaluate("bigbag")
+  check("bags never upgrade", bagEv ~= nil and bagEv.upgrade == false)
+  local ammoEv = gear.Evaluate("ammo")
+  check("ammo never upgrades", ammoEv ~= nil and ammoEv.upgrade == false)
+  check("bags explain themselves", gear.WhyNot("bigbag", { upgrade = false }):find("bag", 1, true) ~= nil)
+end
+
 -- Gear scan: equips, combat, audit, two-slot, heirloom, rival, toggle
 do
   local w = gearWorld()

@@ -53,6 +53,19 @@ end
 -- Shield proficiency by class: warrior, paladin, shaman. The client
 -- offers no proficiency query, so the class table is carried here.
 gear.SHIELD_CLASSES = { WARRIOR = true, PALADIN = true, SHAMAN = true }
+-- Thrown weapons by class: warriors and rogues. The client offers no
+-- proficiency query, so the class table is carried here, like shields
+-- above. Anything else holding thrown would only send a doomed equip
+-- at the client every scan.
+gear.THROWN_CLASSES = { WARRIOR = true, ROGUE = true }
+function gear.ThrownBlocked(link)
+  local _, _, _, equipLoc = C_Item.GetItemInfoInstant(link)
+  if equipLoc ~= "INVTYPE_THROWN" then
+    return false
+  end
+  local _, classKey = UnitClass("player")
+  return classKey ~= nil and not gear.THROWN_CLASSES[classKey]
+end
 function gear.ShieldBlocked(link)
   local _, _, _, equipLoc, _, classID, subclassID = C_Item.GetItemInfoInstant(link)
   local isShield = (classID == 4 and subclassID == 6) or equipLoc == "INVTYPE_SHIELD"
@@ -68,6 +81,14 @@ end
 -- Enum.ItemWeaponSubclass.Fishingpole = 20.
 gear.COSMETIC_LOCS = { INVTYPE_BODY = true, INVTYPE_TABARD = true }
 gear.FISHING_SUBCLASS = 20
+-- Container and ammunition slots are never gear: bags, quivers, and
+-- ammo carry no stats and no item level, so scoring them only churns
+-- the unsure path. Refused outright instead of left unanswered.
+gear.NO_SLOT_LOCS = { INVTYPE_BAG = true, INVTYPE_QUIVER = true, INVTYPE_AMMO = true }
+function gear.NoSlot(link)
+  local _, _, _, equipLoc = C_Item.GetItemInfoInstant(link)
+  return equipLoc ~= nil and gear.NO_SLOT_LOCS[equipLoc] or false
+end
 function gear.Cosmetic(link)
   local _, _, _, equipLoc, _, classID, subclassID = C_Item.GetItemInfoInstant(link)
   if equipLoc and gear.COSMETIC_LOCS[equipLoc] then
@@ -109,7 +130,10 @@ function gear.Evaluate(link)
   if gear.ProfessionTool(link) then
     return { upgrade = false }
   end
-  if gear.Unusable(link) or gear.ShieldBlocked(link) then
+  if gear.Unusable(link) or gear.ShieldBlocked(link) or gear.ThrownBlocked(link) then
+    return { upgrade = false }
+  end
+  if gear.NoSlot(link) then
     return { upgrade = false }
   end
   if rarity == gear.POOR_RARITY then
@@ -136,6 +160,11 @@ gear.ARMOR_BEST = {
   WARLOCK = 1,
 }
 gear.ARMOR_NONGATED = { [0] = true, [5] = true, [6] = true } -- Generic, Cosmetic, Shield
+-- Relic subclasses, Enum.ItemArmorSubclass (verified on the Forever
+-- branch): Libram 7, Idol 8, Totem 9, Sigil 10. Each relic answers to
+-- one class; the client offers no relic proficiency query, so the
+-- class table is carried here, like shields above.
+gear.RELIC_CLASS = { [7] = "PALADIN", [8] = "DRUID", [9] = "SHAMAN", [10] = "DEATHKNIGHT" }
 -- Leveling armor for transitioning classes: hunters and shamans wear
 -- leather until 40, warriors and paladins wear mail until 40 (classic
 -- rule; best armor unlocks at 40). Below 40 a candidate of the leveling
@@ -166,6 +195,12 @@ function gear.ArmorBestBuiltin(link)
   local leveling = classKey and gear.ARMOR_LEVELING[classKey]
   if leveling and subclassID == leveling and (UnitLevel("player") or 0) < gear.ARMOR_TRANSITION_LEVEL then
     return true
+  end
+  -- Relics answer to their class, not to armor weight: a paladin's
+  -- libram passes here, a hunter holding one never reaches a verdict.
+  local relicClass = classID == 4 and gear.RELIC_CLASS[subclassID] or nil
+  if relicClass then
+    return classKey == relicClass
   end
   local slotID = equipLoc and gear.primarySlot[equipLoc]
   local held = slotID and GetInventoryItemLink("player", slotID)
@@ -286,8 +321,8 @@ gear.primarySlot = {
   INVTYPE_TABARD = 19,
 }
 
--- Ranged home slot, per client layout. Forever equips bows, guns, and
--- wands to a dedicated ranged slot (INVSLOT_RANGED = 18); resolved the
+-- Ranged home slot, per client layout. Forever equips bows, guns, thrown,
+-- wands, and relics to a dedicated ranged slot (INVSLOT_RANGED = 18); resolved the
 -- way Blizzard character panels do (C_PaperDollInfo.GetInventorySlotInfo,
 -- used by the Camelot PaperDollFrame), falling back to the main hand
 -- when the client has no ranged slot. Cached: the layout never changes
@@ -308,6 +343,12 @@ end
 
 function gear.HomeSlot(equipLoc)
   if equipLoc == "INVTYPE_RANGED" or equipLoc == "INVTYPE_RANGEDRIGHT" then
+    return gear.RangedHome()
+  end
+  -- Relics share the ranged slot (the Camelot PaperDollFrame paints the
+  -- relic texture onto the RangedSlot button for relic classes), and
+  -- thrown weapons equip there too.
+  if equipLoc == "INVTYPE_RELIC" or equipLoc == "INVTYPE_THROWN" then
     return gear.RangedHome()
   end
   return equipLoc and gear.primarySlot[equipLoc] or nil
@@ -787,6 +828,12 @@ function gear.WhyNot(link, ev)
   end
   if gear.ShieldBlocked(link) then
     reasons[#reasons + 1] = "your class cannot use shields"
+  end
+  if gear.ThrownBlocked(link) then
+    reasons[#reasons + 1] = "your class cannot use thrown weapons"
+  end
+  if gear.NoSlot(link) then
+    reasons[#reasons + 1] = "not gear (bag, quiver, or ammo)"
   end
   if rarity == gear.POOR_RARITY and not gear.EmptyHome(link) then
     reasons[#reasons + 1] = "grey, slot occupied"
