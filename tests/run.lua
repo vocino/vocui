@@ -2152,7 +2152,7 @@ do
   end
   check(
     "panel registers the rows in order",
-    table.concat(keys, ",") == "enabled,announce,hideDefault,repMode,followLatest,locked"
+    table.concat(keys, ",") == "enabled,announce,guildDing,hideDefault,repMode,followLatest,locked"
   )
   check(
     "panel leads with the job and the window",
@@ -2192,9 +2192,15 @@ do
   check("first sighting teaches the default bar", said[1] == nil or said[1]:find("default XP bar", 1, true) ~= nil)
   check("unavailable tracker stays untracked", xp.repTracked() == nil)
   xp.SetEnabled(false)
-  check("toggle off unregisters and hides", xp.frame.events.PLAYER_XP_UPDATE == nil and xp.frame.shown == false)
+  check(
+    "toggle off unregisters and hides",
+    xp.frame.events.PLAYER_XP_UPDATE == nil and xp.frame.events.PLAYER_LEVEL_UP == nil and xp.frame.shown == false
+  )
   xp.SetEnabled(true)
-  check("toggle on restores the bar", xp.frame.events.PLAYER_XP_UPDATE ~= nil)
+  check(
+    "toggle on restores the bar and the ding",
+    xp.frame.events.PLAYER_XP_UPDATE ~= nil and xp.frame.events.PLAYER_LEVEL_UP ~= nil
+  )
 end
 
 -- XP at cap: reputation takes the bar, latest gains resolve
@@ -2240,6 +2246,20 @@ do
   xp.frame.scripts.OnEvent(xp.frame, "PLAYER_ENTERING_WORLD")
   check("cap pivots to the watched faction", xp.repTracked() == 7)
   check("rep mode watches the event set", xp.frame.events.UPDATE_FACTION ~= nil)
+  check("rep mode keeps the ding", xp.frame.events.PLAYER_LEVEL_UP ~= nil)
+  do
+    local sent = {}
+    _G.SendChatMessage = function(msg, chatType)
+      sent[#sent + 1] = { msg, chatType }
+    end
+    _G.IsInGuild = function()
+      return true
+    end
+    xp.opts().guildDing = true
+    xp.frame.scripts.OnEvent(xp.frame, "PLAYER_LEVEL_UP", 10)
+    check("the cap ding still posts", sent[1][1] == "Ding 10" and sent[1][2] == "GUILD")
+    _G.SendChatMessage, _G.IsInGuild = nil, nil
+  end
   _G.GetMaxPlayerLevel, _G.C_Reputation = nil, nil
 end
 
@@ -2304,6 +2324,79 @@ do
   local warned = xp.checkRivals()
   check("a loaded rival warns once", warned == true and said[1]:find("Dominos", 1, true) ~= nil)
   check("the warning never repeats", xp.checkRivals() == false and #said == 1)
+  -- XP guild ding: opt-in level-up post to guild chat
+  do
+    xpWorld()
+    local dingNs = loadXP()
+    dingNs.db = {}
+    local dingXp = dingNs.xp
+    local sent = {}
+    _G.SendChatMessage = function(msg, chatType)
+      sent[#sent + 1] = { msg, chatType }
+    end
+    _G.IsInGuild = function()
+      return true
+    end
+    check("guild ding stays off by default", dingXp.maybeGuildDing(60) == false and #sent == 0)
+    dingXp.opts().guildDing = true
+    check(
+      "guild ding posts the new level",
+      dingXp.maybeGuildDing(60) == true and sent[1][1] == "Ding 60" and sent[1][2] == "GUILD"
+    )
+    _G.IsInGuild = function()
+      return false
+    end
+    check("guild ding stays silent guildless", dingXp.maybeGuildDing(61) == false and #sent == 1)
+    _G.SendChatMessage = nil
+    _G.IsInGuild = function()
+      return true
+    end
+    check("guild ding never errors without the chat api", dingXp.maybeGuildDing(61) == false and #sent == 1)
+    _G.SendChatMessage = function(msg, chatType)
+      sent[#sent + 1] = { msg, chatType }
+    end
+    check(
+      "guild ding reads the level when the event carries none",
+      dingXp.maybeGuildDing(nil) == true and sent[2][1] == "Ding 10" and sent[2][2] == "GUILD"
+    )
+    _G.SendChatMessage, _G.IsInGuild = nil, nil
+  end
+  -- Guild ding defers through combat: a mid-fight level-up stashes its
+  -- level instead of calling the chat API, and the flush after combat
+  -- posts it exactly once.
+  do
+    xpWorld()
+    local combatNs = loadXP()
+    combatNs.db = {}
+    local combatXp = combatNs.xp
+    local combatSent = {}
+    _G.SendChatMessage = function(msg, chatType)
+      combatSent[#combatSent + 1] = { msg, chatType }
+    end
+    _G.IsInGuild = function()
+      return true
+    end
+    _G.InCombatLockdown = function()
+      return true
+    end
+    combatXp.opts().guildDing = true
+    check("guild ding holds fire in combat", combatXp.maybeGuildDing(60) == false and #combatSent == 0)
+    _G.InCombatLockdown = function()
+      return false
+    end
+    check(
+      "guild ding posts after combat",
+      combatXp.flushGuildDing() == true
+        and #combatSent == 1
+        and combatSent[1][1] == "Ding 60"
+        and combatSent[1][2] == "GUILD"
+    )
+    check("a flushed ding never reposts", combatXp.flushGuildDing() == false and #combatSent == 1)
+    _G.SendChatMessage, _G.IsInGuild = nil, nil
+    _G.InCombatLockdown = function()
+      return false
+    end
+  end
   _G.C_AddOns = nil
 end
 
