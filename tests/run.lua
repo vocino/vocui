@@ -2923,5 +2923,167 @@ do
   _G.Baganator, _G.C_AddOns = nil, nil
 end
 
+-- Bars module: action bars and the cooldown manager. Buff bars grow
+-- from the center instead of the native left-to-right fill.
+local BARS = {
+  "modules/bars/Bars.lua",
+  "modules/bars/Grow.lua",
+  "modules/bars/Panel.lua",
+}
+local function loadBars()
+  local ns = loadCore()
+  for _, file in ipairs(BARS) do
+    assert(loadfile(file))("VocUI", ns)
+  end
+  return ns
+end
+
+-- A stub cooldown viewer world: a mixin with the one buff-bar method,
+-- a hook recorder, and bar frames with a recording status texture.
+local function barsWorld()
+  local w = { hooks = {} }
+  _G.hooksecurefunc = function(obj, name, fn)
+    w.hooks[#w.hooks + 1] = { obj = obj, name = name, fn = fn }
+  end
+  _G.CooldownViewerBuffBarItemMixin = {
+    RefreshCooldownInfo = function() end,
+  }
+  return w
+end
+local function stubBar(o)
+  o = o or {}
+  local tex = { points = {}, filled = false }
+  function tex:ClearAllPoints()
+    self.points = {}
+    self.filled = false
+  end
+  function tex:SetPoint(point, relativeTo, relativePoint, x, y)
+    self.points[#self.points + 1] = { point, relativePoint, x, y }
+  end
+  function tex:SetAllPoints()
+    self.points = {}
+    self.filled = true
+  end
+  local bar = { _tex = tex }
+  function bar:GetStatusBarTexture()
+    return self._tex
+  end
+  function bar:GetMinMaxValues()
+    return 0, o.max or 100
+  end
+  function bar:GetValue()
+    return o.value or 0
+  end
+  function bar:GetWidth()
+    return o.w or 200
+  end
+  function bar:GetHeight()
+    return o.h or 19
+  end
+  function bar:GetOrientation()
+    return o.orient or "HORIZONTAL"
+  end
+  local item = {}
+  function item:GetBarFrame()
+    return bar
+  end
+  return item, bar, tex
+end
+
+-- Bars: descriptor, state location, Forever-only options
+do
+  local w = barsWorld()
+  local ns = loadBars()
+  ns.db = {}
+  local bars = ns.bars
+  ns.modules.InitAll()
+  check(
+    "bars descriptor registered",
+    ns.modules.GetAll()[1] == bars.descriptor and bars.descriptor.name == "bars" and bars.descriptor.default == true
+  )
+  check(
+    "bars state lives under modules.bars",
+    type(ns.db.modules) == "table" and ns.db.modules.bars.enabled == true and ns.db.modules.bars.growth == "center" and ns.db.bars == nil
+  )
+  local keys = {}
+  for _, row in ipairs(bars.OPTIONS) do
+    if type(row.key) == "string" then
+      keys[#keys + 1] = row.key
+    end
+  end
+  check(
+    "bars options present",
+    table.concat(keys, ",") == "enabled,growth" and ns.db.modules.bars.growth == "center"
+  )
+  check(
+    "bars help lines keep config second to last",
+    ns.HELP[#ns.HELP - 1]:find("config", 1, true) ~= nil and ns.HELP[3]:find("/vui bars", 1, true) ~= nil
+  )
+  check("bars hooks the buff-bar update on init", #w.hooks == 1 and w.hooks[1].name == "RefreshCooldownInfo")
+  _G.hooksecurefunc, _G.CooldownViewerBuffBarItemMixin = nil, nil
+end
+
+-- Bars fill: center, left, right, and vertical
+do
+  barsWorld()
+  local ns = loadBars()
+  ns.db = {}
+  local bars = ns.bars
+  local item, bar, tex = stubBar({ value = 40 })
+  check(
+    "center anchors half the fill each way",
+    bars.ApplyFill(item) == true and #tex.points == 4 and tex.points[3][1] == "LEFT" and tex.points[3][2] == "CENTER"
+      and tex.points[3][3] == -40 and tex.points[4][1] == "RIGHT" and tex.points[4][2] == "CENTER" and tex.points[4][3] == 40
+  )
+  ns.db.modules.bars.growth = "right"
+  check(
+    "right pins the fill to the right edge",
+    bars.ApplyFill(item) == true and tex.points[3][1] == "LEFT" and tex.points[3][2] == "RIGHT"
+      and tex.points[3][3] == -80 and tex.points[4][1] == "RIGHT" and tex.points[4][2] == "RIGHT"
+  )
+  ns.db.modules.bars.growth = "left"
+  check(
+    "left hands the fill back to the client",
+    bars.ApplyFill(item) == true and tex.filled == true and #tex.points == 0
+  )
+  ns.db.modules.bars.growth = "sideways"
+  check("unknown growth stays native", bars.ApplyFill(item) == true and tex.filled == true)
+  ns.db.modules.bars.growth = "center"
+  local vitem, _, vtex = stubBar({ value = 50, orient = "VERTICAL" })
+  check(
+    "vertical bars center vertically",
+    bars.ApplyFill(vitem) == true and vtex.points[3][1] == "TOP" and vtex.points[3][2] == "CENTER"
+  )
+  check("nothing to place on stays quiet", bars.ApplyFill(nil) == false and bars.ApplyFill({}) == false)
+  ns.db.modules.bars.enabled = false
+  bars.ApplyFill(item)
+  check("a disabled module restores the fill", bars.OnBarCooldown(item) == false and tex.filled == true)
+  _G.hooksecurefunc, _G.CooldownViewerBuffBarItemMixin = nil, nil
+end
+
+-- Bars hook: installs once, on viewer load
+do
+  local w = barsWorld()
+  local ns = loadBars()
+  ns.db = {}
+  local bars = ns.bars
+  ns.modules.InitAll()
+  check(
+    "the viewer load hooks the buff-bar update",
+    #w.hooks == 1 and w.hooks[1].name == "RefreshCooldownInfo" and bars.hooked == true
+  )
+  check("the hook installs once", bars.InstallHook() == true and #w.hooks == 1)
+  local fresh = loadBars()
+  fresh.db = {}
+  fresh.modules.InitAll()
+  check("a viewer already loaded still hooks", #w.hooks == 2)
+  _G.CooldownViewerBuffBarItemMixin = nil
+  local later = loadBars()
+  later.db = {}
+  check("no viewer means no hook yet", later.bars.InstallHook() == false and later.bars.hooked ~= true)
+  _G.hooksecurefunc, _G.CooldownViewerBuffBarItemMixin = nil, nil
+  check("no hook API means unavailable", bars.IsAvailable() == false)
+end
+
 print(string.format("%d passed, %d failed", pass, fail))
 os.exit(fail > 0 and 1 or 0)

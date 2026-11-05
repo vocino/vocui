@@ -1,0 +1,166 @@
+local _, ns = ...
+local bars = {}
+ns.bars = bars
+
+-- Bars: action-bar and cooldown-manager customization, under the
+-- module contract. First job: the cooldown viewer's buff bars grow
+-- from the center instead of the native left-to-right fill, through
+-- one secure hook and no new frames.
+
+bars.SECTION = "modules.bars"
+
+-- Defaults are the product: the module ships set up the way its player
+-- plays. Center growth is the look; left is the native fill and right
+-- its mirror, kept for players who read the other way.
+bars.defaults = {
+  enabled = true,
+  growth = "center",
+}
+
+-- The live state table: VocUIDB.modules.bars and nowhere else.
+function bars.opts()
+  return ns.config.Section(bars.SECTION, bars.defaults)
+end
+
+-- Declarative option rows for the module's settings page (CRAFT:
+-- settings are data). Growth reads live on every buff-bar update, so
+-- only the toggle acts beyond the store write.
+bars.OPTIONS = {
+  {
+    key = "enabled",
+    kind = "checkbox",
+    label = "Restyle cooldown bars",
+    tooltip = "Grow cooldown buff bars from the chosen edge",
+  },
+  {
+    kind = "header",
+    label = "Fill",
+  },
+  {
+    key = "growth",
+    kind = "dropdown",
+    label = "Bar growth",
+    tooltip = "Horizontal bars grow from the center, left, or right; vertical bars center or stay native",
+    choices = {
+      { value = "center", label = "Center" },
+      { value = "left", label = "Left" },
+      { value = "right", label = "Right" },
+    },
+  },
+}
+
+-- Validity predicate. The whole job is one secure hook onto the cooldown
+-- viewer's buff-bar items; without hooksecurefunc nothing here can act,
+-- so the module is never initialized and never listed (principle 12).
+function bars.IsAvailable()
+  return type(hooksecurefunc) == "function"
+end
+
+local frame = CreateFrame("Frame")
+bars.frame = frame
+
+frame:SetScript("OnEvent", function(_, event, addon)
+  if event == "ADDON_LOADED" and addon == "Blizzard_CooldownViewer" then
+    bars.InstallHook()
+  end
+end)
+
+-- Install the one hook, once, whenever the viewer addon loads. Acquire
+-- ordering never matters: the hook re-applies on every buff-bar update,
+-- so items acquired before it still restyle on their next frame.
+function bars.InstallHook()
+  if bars.hooked then
+    return true
+  end
+  if type(hooksecurefunc) ~= "function" then
+    return false
+  end
+  local mixin = CooldownViewerBuffBarItemMixin
+  if type(mixin) ~= "table" or type(mixin.RefreshCooldownInfo) ~= "function" then
+    return false
+  end
+  hooksecurefunc(mixin, "RefreshCooldownInfo", bars.OnBarCooldown)
+  bars.hooked = true
+  return true
+end
+
+-- Toggle the module: the setting applies live, the checkbox sound
+-- confirms, and the fill restores itself through the hook, so nothing
+-- foreign lingers while off.
+function bars.SetEnabled(on)
+  ns.config.Set(bars.SECTION, "enabled", on)
+  ns.play(on and "on" or "off")
+  ns.say("bars module " .. (on and "on" or "off"))
+  if bars.ApplyEnabledImpl then
+    bars.ApplyEnabledImpl()
+  end
+end
+
+function bars.ToggleEnabled()
+  bars.SetEnabled(not bars.opts().enabled)
+end
+
+-- The Impl hooks the descriptor delegates to: the load waiter registers
+-- or unregisters with the toggle, and enabling late-installs the hook
+-- when the viewer already loaded first.
+function bars.ApplyEnabledImpl()
+  if bars.opts().enabled then
+    frame:RegisterEvent("ADDON_LOADED")
+    bars.InstallHook()
+  else
+    frame:UnregisterEvent("ADDON_LOADED")
+  end
+end
+
+function bars.InitImpl()
+  bars.ApplyEnabledImpl()
+end
+
+function bars.Slash(rest)
+  local cmd = (rest or ""):match("^(%S*)") or ""
+  if cmd == "" then
+    bars.ToggleEnabled()
+  elseif cmd == "on" then
+    bars.SetEnabled(true)
+  elseif cmd == "off" then
+    bars.SetEnabled(false)
+  else
+    ns.help()
+  end
+end
+
+-- The descriptor loads first; the job files below fill in the Impl
+-- functions it delegates to, so registration never waits on them.
+local descriptor = {
+  name = "bars",
+  title = "Bars",
+  job = "Customizes action bars and the cooldown manager, starting with cooldown buff bars that grow from the center",
+  default = true,
+  IsAvailable = bars.IsAvailable,
+  init = function()
+    if bars.InitImpl then
+      bars.InitImpl()
+    end
+  end,
+  BuildPanel = function(page)
+    if bars.BuildPanelImpl then
+      bars.BuildPanelImpl(page)
+    end
+  end,
+  Slash = bars.Slash,
+}
+bars.descriptor = descriptor
+ns.modules.Register(descriptor)
+
+-- Help lines for this module's subcommands, first among the modules so
+-- the house grammar (config second to last, help last) still holds.
+do
+  local lines = {
+    "/vui bars          turn the bars module on or off",
+    "/vui bars on|off   turn the bars module on or off",
+  }
+  local at = #ns.HELP - 2 -- ahead of the config line (second to last)
+  for i, line in ipairs(lines) do
+    table.insert(ns.HELP, at + i, line)
+  end
+end

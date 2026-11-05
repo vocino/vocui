@@ -25,6 +25,9 @@ core/Modules.lua
 core/Settings.lua
 core/Slash.lua
 core/Main.lua
+modules/bars/Bars.lua
+modules/bars/Grow.lua
+modules/bars/Panel.lua
 modules/gear/Gear.lua
 modules/gear/Evaluate.lua
 modules/gear/Panel.lua

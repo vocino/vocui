@@ -24,6 +24,7 @@ read_globals = {
   "C_AddOns", "C_Container", "C_GossipInfo", "C_Item", "C_MajorFactions", "C_MerchantFrame", "C_PaperDollInfo", "C_PetBattles",
   "C_PvP", "C_QuestLog", "C_Reputation", "C_UnitAuras",
   "C_SpecializationInfo", "C_Timer",
+  "CooldownViewerBuffBarItemMixin",
   "CreateFrame",
   "CreateSettingsListSectionHeaderInitializer",
   "GameTooltip",

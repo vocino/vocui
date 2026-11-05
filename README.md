@@ -89,6 +89,10 @@ else, the wiki is the single source.
 Principles first, on purpose. The core scaffolding is in place (loader,
 settings store, palette, sounds, chat, slash, and the headless test
 harness). Modules so far:
+- **Bars** (`modules/bars/`): action-bar and cooldown-manager
+  customization, starting with cooldown buff bars that grow from the
+  center instead of left to right. Its own page under Settings >
+  AddOns > VocUI and `/vui bars` subcommands.
 - **Gear** (`modules/gear/`): equips bag upgrades out of combat by
   item level, with its own page under Settings > AddOns > VocUI and
   `/vui gear` subcommands. Item level is the whole judgment; Forever
