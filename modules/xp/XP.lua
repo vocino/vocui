@@ -27,7 +27,7 @@ xp.defaults = {
   locked = false,
   point = "BOTTOM",
   x = 0,
-  y = 100,
+  y = 0,
   repAnnounced = false,
   barAnnounced = false,
 }

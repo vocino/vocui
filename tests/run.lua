@@ -1761,6 +1761,11 @@ do
     seg.progress == 0.4 and seg.questEnd == 0.5 and seg.restedEnd == 0.7 and seg.questPct == 10
   )
   check("capped snapshots have no bar", xp.barSegments({ level = 60, xp = 0, req = 1, capped = true }, 0, 0) == nil)
+  local full = xp.barSegments({ level = 10, xp = 900, req = 1000, capped = false }, 300, 0)
+  check(
+    "rested overflow clamps but flags",
+    full.restedEnd == 1 and full.restedOverflow == true and seg.restedOverflow == false
+  )
   check(
     "bar label reads level and percent",
     xp.barLabel({ level = 10, xp = 400, req = 1000 }, seg) == "10  400/1k (40%)"
@@ -2288,8 +2293,11 @@ do
   }
   local seg = xp.barSegments({ level = 10, xp = 400, req = 1000, capped = false }, 200, 100)
   local est = { status = "ready", xpPerHour = 144000, etaSeconds = 1500, windowSeconds = 600 }
-  xp.showTip(est, seg, 1, "xp")
-  check("tooltip titles the module in gold", tip.title == "XP" and tip.color[1] == 1 and tip.color[2] == 0.82)
+  xp.showTip(est, seg, 1, "xp", "10  400/1k (40%)")
+  check(
+    "tooltip titles the xp numbers in gold",
+    tip.title == "10  400/1k (40%)" and tip.color[1] == 1 and tip.color[2] == 0.82
+  )
   check(
     "tooltip carries reach and hint",
     tip.lines[3] == "Rested: 20% of level"
@@ -2298,9 +2306,12 @@ do
   )
   xp.dragging = true
   tip.lines = {}
-  xp.showTip(est, seg, 1, "xp")
+  xp.showTip(est, seg, 1, "xp", "10  400/1k (40%)")
   check("tooltip never fires mid-drag", #tip.lines == 0)
   xp.dragging = false
+  tip.lines = {}
+  xp.showTip(est, seg, 1, "xp")
+  check("tooltip falls back to the module name", tip.title == "XP")
   _G.GameTooltip = nil
 end
 

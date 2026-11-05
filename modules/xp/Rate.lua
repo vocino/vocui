@@ -318,6 +318,9 @@ function xp.barSegments(snap, restedXp, questXp)
   end
   local r = (type(restedXp) == "number" and restedXp > 0) and restedXp or 0
   local q = (type(questXp) == "number" and questXp > 0) and questXp or 0
+  -- Overflow is native-semantics only: (xp + rested) / req, ignoring
+  -- the custom quest overlay the native bar never knew.
+  local overflowed = (snap.xp + r) / snap.req > 1
   local progress = math.max(0, math.min(1, snap.xp / snap.req))
   local questEnd = math.max(progress, math.min(1, (snap.xp + q) / snap.req))
   local restedEnd = math.max(questEnd, math.min(1, (snap.xp + q + r) / snap.req))
@@ -326,6 +329,7 @@ function xp.barSegments(snap, restedXp, questXp)
     restedEnd = restedEnd,
     questEnd = questEnd,
     hasRested = r > 0,
+    restedOverflow = overflowed,
     hasQuest = q > 0,
     pct = progress * 100,
     restedPct = r / snap.req * 100,

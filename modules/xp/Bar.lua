@@ -3,22 +3,25 @@ local xp = ns.xp
 
 -- The bar, built the way Blizzard builds its own ExpStatusBarTemplate:
 -- a StatusBar wearing the native XP fill atlases, the native
--- background, blue rested and gold quest overlays on classic bar
--- grain, and a GameFontHighlight label. Sized from the live native
--- geometry every refresh, so the stroke and ticks land at 1:1.
+-- background, the prediction fill for rested reach (gold-tinted for
+-- banked quest reach), and the rested pip. Sized from the live native
+-- geometry every refresh, so the stroke and ticks land at 1:1. The
+-- frame is the art zone only; the bar label wears the native
+-- TextStatusBar face and shows on hover, like the native text.
 
 xp.BAR_WIDTH = 571 -- Mainline container width, the fallback everywhere
 xp.TROUGH_WIDTH = 565 -- InitializeBars seats the bar at container minus 6
 xp.TROUGH_HEIGHT = 11
 xp.MAX_SEGMENTS = 40 -- validation ceiling, twice the widest native bar
-xp.ART_HEIGHT = 17 -- the native container height; rate and stats live below it
-xp.FRAME_HEIGHT = 55 -- art zone, rate line, and stats line
+xp.ART_HEIGHT = 17 -- the native container height; the frame is exactly this
+xp.FILL_HEIGHT = 11 -- the native prediction fill height, bottom-anchored
 xp.XP_ATLAS = "UI-HUD-ExperienceBar-Fill-Experience"
 xp.RESTED_ATLAS = "UI-HUD-ExperienceBar-Fill-Rested"
 xp.BG_ATLAS = "UI-HUD-ExperienceBar-Background"
 xp.FRAME_ATLAS = "UI-HUD-ExperienceBar-Frame"
 xp.PIP_ATLAS = "UI-HUD-ExperienceBar-Frame-Pip"
 xp.DIVIDER_ATLAS = "ui-hud-experiencebar-divider" -- Camelot segment ticks
+xp.PREDICTION_ATLAS = "UI-HUD-ExperienceBar-Fill-Prediction" -- rested reach
 xp.FLARE_XP_ATLAS = "UI-HUD-ExperienceBar-Flare-XP-2x-Flipbook"
 xp.FLARE_RESTED_ATLAS = "UI-HUD-ExperienceBar-Flare-Rested-2x-Flipbook"
 xp.LEVELUP_XP_ATLAS = "UI-HUD-ExperienceBar-Fill-Experience-2x-Flipbook"
@@ -26,7 +29,7 @@ xp.LEVELUP_RESTED_ATLAS = "UI-HUD-ExperienceBar-Fill-Rested-2x-Flipbook"
 
 local frame = CreateFrame("Frame", "VocUIXPFrame", UIParent)
 xp.frame = frame
-frame:SetSize(xp.BAR_WIDTH, xp.FRAME_HEIGHT)
+frame:SetSize(xp.BAR_WIDTH, xp.ART_HEIGHT)
 frame:SetMovable(true)
 frame:SetClampedToScreen(true)
 frame:EnableMouse(true) -- hover tooltip always; lock gates dragging, not looking
@@ -66,26 +69,26 @@ local bg = bar:CreateTexture(nil, "BACKGROUND")
 bg:SetAllPoints(bar)
 setAtlasOrHide(bg, xp.BG_ATLAS, false)
 
+-- Rested reach wears the native prediction fill: the same atlas
+-- Blizzard's ExhaustionLevelFillBar wears, bottom-anchored at the
+-- native height, cropped from the left. No tint; the atlas carries
+-- its own color. A client without the atlas hides the layer.
 local restFill = bar:CreateTexture(nil, "ARTWORK", nil, -1)
-restFill:SetPoint("LEFT", bar, "LEFT", 0, 0)
-restFill:SetPoint("TOP", bar, "TOP", 0, 0)
-restFill:SetPoint("BOTTOM", bar, "BOTTOM", 0, 0)
-restFill:SetWidth(0)
--- Blizzard's own bar grain under a blue tint: atlas fills all read
--- purple-family, and a flat color lost the texture. The classic
--- statusbar file is neutral grain, so the tint renders true.
-restFill:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
-restFill:SetVertexColor(ns.COLORS.rest[1], ns.COLORS.rest[2], ns.COLORS.rest[3])
+restFill:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0)
+restFill:SetSize(0, xp.FILL_HEIGHT)
+local restOk = setAtlasOrHide(restFill, xp.PREDICTION_ATLAS, false)
 restFill:Hide()
 
+-- Banked quest XP has no native counterpart, so it borrows the
+-- prediction grain in gold: the same shading language as rested
+-- reach, reading as one overlay family instead of a foreign slab.
 local questFill = bar:CreateTexture(nil, "ARTWORK", nil, 0)
-questFill:SetPoint("TOP", bar, "TOP", 0, 0)
-questFill:SetPoint("BOTTOM", bar, "BOTTOM", 0, 0)
-questFill:SetWidth(0)
--- Banked quest XP wears the same classic grain under a deeper gold
--- tint: the flat slab read correct but foreign next to the fills.
-questFill:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
-questFill:SetVertexColor(ns.COLORS.quest[1], ns.COLORS.quest[2], ns.COLORS.quest[3])
+questFill:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0)
+questFill:SetSize(0, xp.FILL_HEIGHT)
+local questOk = setAtlasOrHide(questFill, xp.PREDICTION_ATLAS, false)
+if questOk then
+  questFill:SetVertexColor(ns.COLORS.quest[1], ns.COLORS.quest[2], ns.COLORS.quest[3])
+end
 questFill:Hide()
 
 -- The stroke around the bar and the rested pip: the same two atlas
@@ -99,8 +102,8 @@ local pip = bar:CreateTexture(nil, "OVERLAY", nil, 1)
 pip:SetSize(10, 14)
 local pipOk = setAtlasOrHide(pip, xp.PIP_ATLAS, false)
 pip:Hide()
--- Unknown font objects error at creation, so the label resolves its
--- white face with a fallback to gold.
+-- Unknown font objects error at creation, so the label wears the
+-- native TextStatusBar face with a small-face fallback.
 local function makeFont(parent, template, fallback)
   local ok, fs = pcall(parent.CreateFontString, parent, nil, "OVERLAY", template)
   if ok and fs ~= nil then
@@ -108,9 +111,58 @@ local function makeFont(parent, template, fallback)
   end
   return parent:CreateFontString(nil, "OVERLAY", fallback)
 end
-local barText = makeFont(bar, "GameFontHighlight", "GameFontNormal")
+local barText = makeFont(bar, "TextStatusBarText", "GameFontNormalSmall")
 barText:SetPoint("CENTER", bar, "CENTER", 0, 1)
 barText:SetShadowOffset(1, -1)
+-- Hover-only, like the native ShowText/HideText: the bar reads clean
+-- until the player asks it a question.
+barText:Hide()
+
+function xp.showBarLabel()
+  barText:Show()
+end
+
+function xp.hideBarLabel()
+  barText:Hide()
+end
+
+-- Show and hide ride the native fade: the container fades over half a
+-- second on bar switches. A client without the fader shows and hides
+-- at once. The hide is generation-guarded, so a quick re-show never
+-- eats a delayed hide.
+local hideGen = 0
+
+function xp.barShown(shown)
+  if shown then
+    hideGen = hideGen + 1
+    if not frame:IsShown() then
+      frame:SetShown(true)
+      if type(UIFrameFadeIn) == "function" then
+        pcall(UIFrameFadeIn, frame, 0.5, 0, 1)
+      end
+    end
+    return
+  end
+  if not frame:IsShown() then
+    return
+  end
+  if type(UIFrameFadeOut) ~= "function" then
+    frame:SetShown(false)
+    return
+  end
+  hideGen = hideGen + 1
+  local gen = hideGen
+  pcall(UIFrameFadeOut, frame, 0.5, 1, 0)
+  if type(C_Timer) == "table" and type(C_Timer.After) == "function" then
+    pcall(C_Timer.After, 0.5, function()
+      if gen == hideGen then
+        frame:SetShown(false)
+      end
+    end)
+  else
+    frame:SetShown(false)
+  end
+end
 
 -- Snap every region to the pixel grid: Blizzard rounds layout natively,
 -- so fractional widths and drag positions render crisp instead of blurred.
@@ -127,20 +179,6 @@ snapRegion(questFill)
 snapRegion(frameTex)
 snapRegion(pip)
 snapRegion(barText)
-
--- The rate line under the art zone: XP/hr and time-to-level, always visible.
-local rate = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-rate:SetPoint("TOP", frame, "TOP", 0, -(xp.ART_HEIGHT + 5))
-rate:SetShadowOffset(1, -1)
-snapRegion(rate)
-
--- The stats line under the rate line: ready quests and rested reach,
--- always visible, in the standard face with the 1px shadow.
-local sub = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-sub:SetPoint("TOP", rate, "BOTTOM", 0, -2)
-sub:SetShadowOffset(1, -1)
-snapRegion(sub)
-sub:Hide()
 
 -- Native geometry: the native bar is not one size. Mainline seats a
 -- 571x17 container (565x11 trough, no segments) while Camelot seats
@@ -252,7 +290,7 @@ function xp.applyGeometry()
     return geo
   end
   appliedGeo = geo
-  frame:SetSize(geo.width, xp.FRAME_HEIGHT)
+  frame:SetSize(geo.width, xp.ART_HEIGHT)
   bar:SetSize(geo.troughW, geo.troughH)
   frameTex:SetSize(geo.width, xp.ART_HEIGHT)
   local ticks = geo.segments - 1
@@ -313,6 +351,19 @@ function xp.paintProgress(have, need, level, label)
   barText:SetText(label)
 end
 
+-- Native hides the prediction fill when rested overflows the bar, but
+-- only on the clients that say so: Mainline hides it, Camelot keeps
+-- the bar full. A missing API keeps the old behavior and shows it.
+local function restedOverflowShown()
+  if type(ShouldRestedXpBarDisplayWhenOverflowing) == "function" then
+    local ok, show = pcall(ShouldRestedXpBarDisplayWhenOverflowing)
+    if ok then
+      return show and true or false
+    end
+  end
+  return true
+end
+
 function xp.paintOverlays(geo, seg)
   local isRested = seg ~= nil and seg.hasRested
   xp.applyBarArt(
@@ -320,7 +371,7 @@ function xp.paintOverlays(geo, seg)
     isRested and xp.FLARE_RESTED_ATLAS or xp.FLARE_XP_ATLAS,
     isRested and xp.LEVELUP_RESTED_ATLAS or xp.LEVELUP_XP_ATLAS
   )
-  if isRested then
+  if isRested and restOk and not (seg.restedOverflow and not restedOverflowShown()) then
     restFill:SetWidth(seg.restedEnd * geo.troughW)
     -- Crop, never stretch: the grain maps across the full bar width,
     -- so each span keeps its native shading at any width.
@@ -329,12 +380,10 @@ function xp.paintOverlays(geo, seg)
   else
     restFill:Hide()
   end
-  if seg ~= nil and seg.questEnd > seg.progress then
+  if seg ~= nil and questOk and seg.questEnd > seg.progress then
     questFill:ClearAllPoints()
-    questFill:SetPoint("LEFT", bar, "LEFT", seg.progress * geo.troughW, 0)
-    questFill:SetPoint("TOP", bar, "TOP", 0, 0)
-    questFill:SetPoint("BOTTOM", bar, "BOTTOM", 0, 0)
-    questFill:SetWidth((seg.questEnd - seg.progress) * geo.troughW)
+    questFill:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", seg.progress * geo.troughW, 0)
+    questFill:SetSize((seg.questEnd - seg.progress) * geo.troughW, xp.FILL_HEIGHT)
     questFill:SetTexCoord(seg.progress, seg.questEnd, 0, 1)
     questFill:Show()
   else
@@ -358,20 +407,11 @@ function xp.hideOverlays()
   pip:Hide()
 end
 
-function xp.paintLines(title, stats)
-  rate:SetText(title)
-  if stats then
-    sub:SetText(stats)
-    sub:Show()
-  else
-    sub:Hide()
-  end
-end
-
--- The tooltip carries the engine the bar replaced: the rate line, the
--- rested and quest reach, the bonus list, and the missing list. It
--- never fires mid-drag: the module's own drag flag guards it, which
--- keeps the promise without touching an unverified global.
+-- The tooltip carries the engine the bar replaced: the XP numbers
+-- first like the native title, then the rate line, the rested and
+-- quest reach, the bonus list, and the missing list. It never fires
+-- mid-drag: the module's own drag flag guards it, which keeps the
+-- promise without touching an unverified global.
 xp.dragging = false
 
 local function tipBase()
@@ -397,7 +437,7 @@ local function tipClose()
   GameTooltip:Show()
 end
 
-function xp.showTip(est, seg, questCount, mode)
+function xp.showTip(est, seg, questCount, mode, label)
   if not tipBase() then
     return
   end
@@ -405,7 +445,7 @@ function xp.showTip(est, seg, questCount, mode)
     xp.showRepTip(est)
     return
   end
-  GameTooltip:SetText("XP", ns.COLORS.gold[1], ns.COLORS.gold[2], ns.COLORS.gold[3])
+  GameTooltip:SetText(label or "XP", ns.COLORS.gold[1], ns.COLORS.gold[2], ns.COLORS.gold[3])
   GameTooltip:AddLine(xp.titleText(est), ns.COLORS.text[1], ns.COLORS.text[2], ns.COLORS.text[3], true)
   GameTooltip:AddLine(xp.subText(est), ns.COLORS.muted[1], ns.COLORS.muted[2], ns.COLORS.muted[3], true)
   if seg then

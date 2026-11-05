@@ -626,8 +626,7 @@ local function refreshRep(o)
   -- No overlays in rep mode: rested and quest XP don't exist here.
   xp.hideOverlays()
   applyNativeBar()
-  xp.paintLines(xp.titleText(est), xp.repStatsLine(progress))
-  frame:SetShown(true)
+  xp.barShown(true)
   frame._tip = function()
     xp.showRepTip(est, progress, repWatching)
   end
@@ -643,7 +642,7 @@ function xp.refresh()
   flushSummary(now)
   xp.flushGuildDing()
   if mode == "dormant" then
-    frame:SetShown(false)
+    xp.barShown(false)
     applyNativeBar()
     return
   end
@@ -660,17 +659,17 @@ function xp.refresh()
     est.etaSeconds = longEta or est.etaSeconds
   end
   local seg = xp.barSegments(baseline, xp.restedAmount(), questXp)
+  local label = seg and xp.barLabel(baseline, seg) or nil
   if seg then
     -- Raw XP, never fractions: the template floors animated values,
     -- and the floor of a fraction is a vanished fill.
-    xp.paintProgress(baseline.xp, baseline.req, baseline.level, xp.barLabel(baseline, seg))
+    xp.paintProgress(baseline.xp, baseline.req, baseline.level, label)
     xp.paintOverlays(geo, seg)
   end
   applyNativeBar()
-  xp.paintLines(xp.titleText(est), seg and xp.subStatsLine(seg, questCount) or nil)
-  frame:SetShown(true)
+  xp.barShown(true)
   frame._tip = function()
-    xp.showTip(est, seg, questCount, mode)
+    xp.showTip(est, seg, questCount, mode, label)
   end
 end
 
@@ -728,7 +727,7 @@ end
 
 local function enterDormant()
   mode = "dormant"
-  frame:SetShown(false)
+  xp.barShown(false)
   paused = false
   if ticker then
     ticker:Cancel()
@@ -862,11 +861,13 @@ frame:SetScript("OnDragStop", function()
   end
 end)
 frame:SetScript("OnEnter", function()
+  xp.showBarLabel()
   if frame._tip then
     frame._tip()
   end
 end)
 frame:SetScript("OnLeave", function()
+  xp.hideBarLabel()
   if type(GameTooltip) == "table" then
     GameTooltip:Hide()
   end
