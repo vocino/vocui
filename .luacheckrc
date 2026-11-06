@@ -21,7 +21,7 @@ globals = {
 -- presence-gated at the call site; a missing API is never an error.
 read_globals = {
   "Auctionator", "Baganator", "Syndicator", -- third-party guests, presence-gated at every call
-  "C_AddOns", "C_Container", "C_GossipInfo", "C_Item", "C_MajorFactions", "C_MerchantFrame", "C_PaperDollInfo", "C_PetBattles",
+  "C_AddOns", "C_ChatInfo", "C_Container", "C_GossipInfo", "C_Item", "C_MajorFactions", "C_MerchantFrame", "C_PaperDollInfo", "C_PetBattles",
   "C_PvP", "C_QuestLog", "C_Reputation", "C_UnitAuras",
   "C_SpecializationInfo", "C_Timer",
   "CooldownViewerBuffBarItemMixin",

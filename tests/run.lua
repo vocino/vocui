@@ -2408,6 +2408,74 @@ do
       return false
     end
   end
+  -- Guild ding asks the messaging lockdown first: a refused line
+  -- stashes like a combat ding, the flush holds fire while locked,
+  -- and the send goes through the namespace, never the global.
+  do
+    xpWorld()
+    _G.UnitAffectingCombat = function()
+      return false
+    end
+    local lockNs = loadXP()
+    lockNs.db = {}
+    local lockXp = lockNs.xp
+    local lockSent, globalSent = {}, {}
+    _G.C_ChatInfo = {
+      SendChatMessage = function(msg, chatType)
+        lockSent[#lockSent + 1] = { msg, chatType }
+      end,
+      InChatMessagingLockdown = function()
+        return true
+      end,
+    }
+    _G.SendChatMessage = function(msg, chatType)
+      globalSent[#globalSent + 1] = { msg, chatType }
+    end
+    _G.IsInGuild = function()
+      return true
+    end
+    lockXp.opts().guildDing = true
+    check(
+      "guild ding holds fire under the messaging lockdown",
+      lockXp.maybeGuildDing(60) == false and #lockSent == 0 and #globalSent == 0
+    )
+    check("the flush holds fire while locked", lockXp.flushGuildDing() == false and #lockSent == 0)
+    _G.C_ChatInfo.InChatMessagingLockdown = function()
+      return false
+    end
+    check(
+      "guild ding posts through the namespace after the lockdown",
+      lockXp.flushGuildDing() == true
+        and #lockSent == 1
+        and lockSent[1][1] == "Ding 60"
+        and lockSent[1][2] == "GUILD"
+        and #globalSent == 0
+    )
+    _G.C_ChatInfo, _G.SendChatMessage, _G.IsInGuild, _G.UnitAffectingCombat = nil, nil, nil, nil
+  end
+  -- A missing lockdown query is not a refusal: the gate only holds
+  -- when the client says so.
+  do
+    xpWorld()
+    local openNs = loadXP()
+    openNs.db = {}
+    local openXp = openNs.xp
+    local openSent = {}
+    _G.C_ChatInfo = {
+      SendChatMessage = function(msg, chatType)
+        openSent[#openSent + 1] = { msg, chatType }
+      end,
+    }
+    _G.IsInGuild = function()
+      return true
+    end
+    openXp.opts().guildDing = true
+    check(
+      "guild ding sends without the lockdown query",
+      openXp.maybeGuildDing(61) == true and #openSent == 1 and openSent[1][1] == "Ding 61"
+    )
+    _G.C_ChatInfo, _G.IsInGuild = nil, nil
+  end
   _G.C_AddOns = nil
 end
 

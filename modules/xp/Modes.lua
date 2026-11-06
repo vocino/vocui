@@ -426,18 +426,46 @@ local function onRep(gainedID, updatedStanding, renownLevel)
   xp.refresh()
 end
 
+-- The client refuses chat from addon code while its messaging lockdown
+-- holds, and answers with ADDON_ACTION_BLOCKED, which no pcall can
+-- catch: a refused call still logs the block against the addon. Ask
+-- first and stay quiet instead. A missing query is not a refusal: the
+-- gate only holds when the client says so.
+local function chatLocked()
+  if type(C_ChatInfo) ~= "table" then
+    return false
+  end
+  local gated = C_ChatInfo.InChatMessagingLockdown
+  if type(gated) ~= "function" then
+    return false
+  end
+  local ok, held = pcall(gated)
+  return ok and held == true
+end
+
+-- One send through the documented namespace first. The bare global is
+-- Blizzard's deprecated shim over the same function, so it only runs
+-- when the namespace is missing, never as a retry: a refused line would
+-- book a second blocked action for the same send.
+local function sendGuild(text)
+  if type(C_ChatInfo) == "table" and type(C_ChatInfo.SendChatMessage) == "function" then
+    return pcall(C_ChatInfo.SendChatMessage, text, "GUILD")
+  end
+  if type(SendChatMessage) == "function" then
+    return pcall(SendChatMessage, text, "GUILD")
+  end
+  return false
+end
+
 -- Level-up posts to guild chat, opt-in and off by default: guild chat
 -- is shared space, so nothing posts unless the player asks. Guildless,
 -- or no chat API, means silence, never an error. Returns true when a
 -- line went out, so tests can pin the behavior. A level-up can land
--- mid-combat, and sending there trips the client's blocked-action guard,
--- so a combat ding stashes its level and goes out after the fight; the
--- latest level wins when two land before the flush.
+-- somewhere the client refuses chat, in combat or under the messaging
+-- lockdown, so a refused ding stashes its level and goes out on a later
+-- flush; the latest level wins when two land before the flush.
 function xp.maybeGuildDing(level)
   if not xp.opts().guildDing then
-    return false
-  end
-  if type(SendChatMessage) ~= "function" then
     return false
   end
   if type(IsInGuild) ~= "function" or not IsInGuild() then
@@ -453,28 +481,28 @@ function xp.maybeGuildDing(level)
   if type(lvl) ~= "number" then
     return false
   end
-  if ns.combat() then
+  if ns.combat() or chatLocked() then
     pendingGuildDing = lvl
     return false
   end
-  local ok = pcall(SendChatMessage, ("Ding %d"):format(math.floor(lvl)), "GUILD")
+  local ok = sendGuild(("Ding %d"):format(math.floor(lvl)))
   if ok then
     pendingGuildDing = nil
   end
   return ok
 end
 
--- Flush a combat-deferred ding once the fight ends. Called from refresh,
--- which already runs every second and on every event including
--- PLAYER_REGEN_ENABLED, so no new timer and no new event. The attempt
--- consumes the pending level either way: a dropped option, a left guild,
--- or a missing API never retries forever, and a fresh combat ding
--- re-stashes on its own event.
+-- Flush a refused ding once the fight ends and the client takes chat
+-- back. Called from refresh, which already runs every second and on
+-- every event including PLAYER_REGEN_ENABLED, so no new timer and no
+-- new event. The attempt consumes the pending level either way: a
+-- dropped option, a left guild, or a missing API never retries forever,
+-- and a fresh refused ding re-stashes on its own event.
 function xp.flushGuildDing()
   if pendingGuildDing == nil then
     return false
   end
-  if ns.combat() then
+  if ns.combat() or chatLocked() then
     return false
   end
   local lvl = pendingGuildDing
