@@ -112,8 +112,8 @@ harness). Modules so far:
   gear automatically at the merchant, guild funds first, audit mode
   instead of acting, a deduped Vendor line in item tooltips, and a junk
   coin in Baganator's bags. It
-  sells junk and repairs, nothing else: no old-gear selling, no
-  disenchanting, no button. Its own page under Settings > AddOns >
+  sells junk, asks about surplus consumables, and repairs;
+  no gear selling, no disenchanting, no button. Its own page under Settings > AddOns >
   VocUI and `/vui vendor` subcommands.
 
 From here the package grows the way it was designed to: a module at

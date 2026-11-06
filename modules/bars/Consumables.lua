@@ -11,15 +11,9 @@ local bars = ns.bars
 -- MacroUI calls bare on the Forever branch:
 -- Interface/AddOns/Blizzard_MacroUI/Blizzard_MacroUI.lua and
 -- Blizzard_MacroIconSelector.lua. Slot limits live in the generated
--- docs: Interface/AddOns/Blizzard_APIDocumentationGenerated/
 -- MacroConstantsDocumentation.lua, 120 account and 30 character
--- macros. Item classes live there too: ItemConstantsDocumentation.lua,
--- Enum.ItemClass.Consumable = 0, Enum.ItemConsumableSubclass Potion = 1
--- and Fooddrink = 5.)
+-- macros.)
 
-bars.CONSUMABLE_CLASS = 0
-bars.SUBCLASS_POTION = 1
-bars.SUBCLASS_FOODDRINK = 5
 bars.ACCOUNT_MACRO_MAX = 120 -- Constants.MacroConsts.MAX_ACCOUNT_MACROS
 bars.CHARACTER_MACRO_MAX = 30 -- Constants.MacroConsts.MAX_CHARACTER_MACROS
 
@@ -32,233 +26,12 @@ bars.MACRO_DEFS = {
   { key = "health", name = "VUI Health", label = "health potion" },
   { key = "mana", name = "VUI Mana", label = "mana potion" },
 }
-
--- Category words, matched case-insensitively against the item's spell
--- name plus its item name. Seeded from the classic consumable pool;
--- "/vui bars survey" prints the exact fields behind every match, so
 -- this table is corrected from observed bags, never from memory.
-bars.CATEGORY_WORDS = {
-  food = {
-    "food",
-    "bread",
-    "roll",
-    "cake",
-    "pie",
-    "meat",
-    "ham",
-    "cheese",
-    "fish",
-    "clam",
-    "crab",
-    "soup",
-    "stew",
-    "sausage",
-    "roast",
-    "pork",
-    "beef",
-    "chicken",
-    "egg",
-    "apple",
-    "melon",
-    "berry",
-    "grain",
-    "loaf",
-    "biscuit",
-    "cookie",
-    "muffin",
-    "tart",
-    "jerky",
-    "fillet",
-    "chops",
-    "kebab",
-    "omelet",
-  },
-  drink = {
-    "drink",
-    "water",
-    "juice",
-    "milk",
-    "tea",
-    "coffee",
-    "nectar",
-    "dew",
-    "brew",
-    "nog",
-    "punch",
-  },
-  health = { "heal" },
-  mana = { "mana" },
-}
-
 -- Session-only macro state: announce-once flags and the combat defer.
 -- Nothing here persists; the macros themselves are the storage.
 bars.macroSaid = {}
+
 bars.macroPending = false
-
-local function playerLevel()
-  if type(UnitLevel) ~= "function" then
-    return nil
-  end
-  local ok, level = pcall(UnitLevel, "player")
-  if ok and type(level) == "number" then
-    return level
-  end
-  return nil
-end
-
--- Full item facts for one bag link, or nil when the item cache cannot
--- answer yet. An uncached answer is unsure, never a verdict: the
--- caller skips the link and GET_ITEM_INFO_RECEIVED retries it.
-function bars.ItemFacts(link)
-  if type(link) ~= "string" then
-    return nil
-  end
-  if type(C_Item) ~= "table" or type(C_Item.GetItemInfo) ~= "function" then
-    return nil
-  end
-  local ok, name, _, _, itemLevel, minLevel, _, subType, _, _, icon, _, classID, subclassID =
-    pcall(C_Item.GetItemInfo, link)
-  if not ok or type(name) ~= "string" or type(classID) ~= "number" or type(subclassID) ~= "number" then
-    return nil
-  end
-  local spellName = nil
-  if type(C_Item.GetItemSpell) == "function" then
-    local okSpell, got = pcall(C_Item.GetItemSpell, link)
-    if okSpell and type(got) == "string" then
-      spellName = got
-    end
-  end
-  return {
-    name = name,
-    itemLevel = itemLevel,
-    minLevel = minLevel,
-    subType = subType,
-    icon = icon,
-    classID = classID,
-    subclassID = subclassID,
-    spell = spellName,
-    link = link,
-  }
-end
-
-local function hasWord(text, words)
-  for _, word in ipairs(words) do
-    if text:find(word, 1, true) then
-      return true
-    end
-  end
-  return false
-end
-
--- One of "food", "drink", "health", "mana", or nil. Only the potion
--- and food-and-drink subclasses can match, so elixirs, flasks,
--- bandages, and scrolls never land in a macro. An item matching both
--- halves of a split matches neither: a miscategorized macro is worse
--- than an unchanged one, and the survey names it for the word table.
-function bars.CategoryOf(facts)
-  if type(facts) ~= "table" or facts.classID ~= bars.CONSUMABLE_CLASS then
-    return nil
-  end
-  local text = ((facts.spell or "") .. " " .. facts.name):lower()
-  if facts.subclassID == bars.SUBCLASS_POTION then
-    local heal = hasWord(text, bars.CATEGORY_WORDS.health)
-    local mana = hasWord(text, bars.CATEGORY_WORDS.mana)
-    if mana and not heal then
-      return "mana"
-    end
-    if heal and not mana then
-      return "health"
-    end
-    return nil
-  end
-  if facts.subclassID == bars.SUBCLASS_FOODDRINK then
-    if hasWord(text, bars.CATEGORY_WORDS.drink) and not hasWord(text, bars.CATEGORY_WORDS.food) then
-      return "drink"
-    end
-    return "food"
-  end
-  return nil
-end
-
--- Highest usable level wins; ties break toward the higher item level,
--- then the earlier name, so the pick is deterministic bag to bag.
-function bars.RanksAbove(a, b)
-  if a.minLevel ~= b.minLevel then
-    return a.minLevel > b.minLevel
-  end
-  local ai = a.itemLevel or 0
-  local bi = b.itemLevel or 0
-  if ai ~= bi then
-    return ai > bi
-  end
-  return a.name < b.name
-end
-
--- Every bag link through one callback: the Syndicator cache when it
--- is present and settled (it already walked the bags for Baganator),
--- else the Blizzard bag walk. fn(link) runs per link; returning true
--- stops a Blizzard walk early.
-function bars.EachLink(fn)
-  if type(fn) ~= "function" then
-    return
-  end
-  if not (ns.inventory and type(ns.inventory.BagLinks) == "function") then
-    return
-  end
-  local links = ns.inventory.BagLinks()
-  if links then
-    for _, link in ipairs(links) do
-      if type(link) == "string" then
-        fn(link)
-      end
-    end
-    return
-  end
-  if type(ns.inventory.EachSlot) == "function" then
-    ns.inventory.EachSlot(function(_, _, _, link)
-      if type(link) == "string" then
-        return fn(link)
-      end
-      return false
-    end)
-  end
-end
-
--- The best usable facts per category key. Items above the player's
--- level never win; an unknown player level fails open. Uncached links
--- are skipped for the next item-info event, never guessed at.
-function bars.CollectBest()
-  local best = {}
-  local level = playerLevel()
-  bars.EachLink(function(link)
-    local facts = bars.ItemFacts(link)
-    if not facts then
-      return false
-    end
-    if facts.classID ~= bars.CONSUMABLE_CLASS then
-      return false
-    end
-    if facts.subclassID ~= bars.SUBCLASS_POTION and facts.subclassID ~= bars.SUBCLASS_FOODDRINK then
-      return false
-    end
-    if type(facts.minLevel) ~= "number" then
-      return false
-    end
-    if level ~= nil and facts.minLevel > level then
-      return false
-    end
-    local cat = bars.CategoryOf(facts)
-    if not cat then
-      return false
-    end
-    if best[cat] == nil or bars.RanksAbove(facts, best[cat]) then
-      best[cat] = facts
-    end
-    return false
-  end)
-  return best
-end
-
 -- Every macro slot on this character: account slots run 1..nAcc and
 -- character slots run past the account max (Blizzard_MacroUI.lua:
 -- actualIndex is the selection plus the macro base, 0 or
@@ -386,7 +159,7 @@ function bars.ResyncMacros()
     return false
   end
   bars.macroPending = false
-  local best = bars.CollectBest()
+  local best = ns.consumables.CollectBest()
   for _, def in ipairs(bars.MACRO_DEFS) do
     if o[def.key] then
       bars.SyncOneMacro(def, best[def.key])
@@ -427,9 +200,9 @@ end
 -- many lines are fine.
 function bars.SurveyImpl()
   local seen, order = {}, {}
-  bars.EachLink(function(link)
-    local facts = bars.ItemFacts(link)
-    if facts and facts.classID == bars.CONSUMABLE_CLASS then
+  ns.consumables.EachLink(function(link)
+    local facts = ns.consumables.ItemFacts(link)
+    if facts and facts.classID == ns.consumables.CONSUMABLE_CLASS then
       local id = link:match("item:(%d+)") or link
       if not seen[id] then
         seen[id] = facts
@@ -441,7 +214,7 @@ function bars.SurveyImpl()
   ns.say("survey: " .. tostring(#order) .. " distinct consumables in bags")
   for _, id in ipairs(order) do
     local facts = seen[id]
-    local cat = bars.CategoryOf(facts)
+    local cat = ns.consumables.CategoryOf(facts)
     if type(facts.minLevel) ~= "number" then
       cat = "uncached"
     end

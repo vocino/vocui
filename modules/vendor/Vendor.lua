@@ -3,9 +3,9 @@ local vendor = {}
 ns.vendor = vendor
 
 -- Vendor: the merchant visit, automated, under the module contract.
--- Poor-quality items sell the moment the merchant window opens, gear
--- repairs right after, each with one chat line. The module sells
--- junk and repairs, nothing else: no old-gear selling, no expansion
+-- repairs right after, each with one chat line. Food, drink, and potions
+-- worse than the best in bags are asked about first: a popup sells them on
+-- accept and stays quiet on decline (Principles #6: selling always asks).
 -- handling, no disenchanting, and no Sell Junk button.
 
 vendor.SECTION = "modules.vendor"
@@ -16,6 +16,7 @@ vendor.SECTION = "modules.vendor"
 vendor.defaults = {
   enabled = true,
   sellJunk = true,
+  surplus = true,
   autoRepair = true,
   guildFunds = true,
   audit = false,
@@ -46,6 +47,12 @@ vendor.OPTIONS = {
     kind = "checkbox",
     label = "Sell junk",
     tooltip = "Sell poor-quality items when a merchant window opens",
+  },
+  {
+    key = "surplus",
+    kind = "checkbox",
+    label = "Confirm surplus consumables",
+    tooltip = "Ask before selling food, drink, and potions worse than the best in bags",
   },
   {
     key = "autoRepair",
@@ -82,7 +89,7 @@ vendor.OPTIONS = {
 -- nothing here can act, so the module is never initialized and never
 -- listed (principle 12).
 function vendor.IsAvailable()
-  return type(C_Container) == "table" and type(C_MerchantFrame) == "table"
+  return type(C_Container) == "table" and type(C_MerchantFrame) == "table" and type(C_Item) == "table"
 end
 
 local frame = CreateFrame("Frame")
@@ -91,6 +98,8 @@ vendor.frame = frame
 frame:SetScript("OnEvent", function(_, event)
   if event == "MERCHANT_SHOW" then
     vendor.OnMerchant()
+  elseif event == "MERCHANT_CLOSED" then
+    vendor.merchantOpen = false
   end
 end)
 
@@ -117,8 +126,10 @@ end
 function vendor.ApplyEnabledImpl()
   if vendor.opts().enabled then
     vendor.frame:RegisterEvent("MERCHANT_SHOW")
+    vendor.frame:RegisterEvent("MERCHANT_CLOSED")
   else
     vendor.frame:UnregisterEvent("MERCHANT_SHOW")
+    vendor.frame:UnregisterEvent("MERCHANT_CLOSED")
   end
 end
 
@@ -150,7 +161,7 @@ end
 local descriptor = {
   name = "vendor",
   title = "Vendor",
-  job = "Sells junk and repairs gear automatically whenever the player visits a vendor",
+  job = "Sells junk, asks before selling worse consumables, and repairs gear whenever the player visits a vendor",
   default = true,
   IsAvailable = vendor.IsAvailable,
   init = function()

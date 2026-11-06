@@ -36,6 +36,8 @@
       "GetNumMacros",
       "CreateSettingsButtonInitializer",
       "CreateSettingsListSectionHeaderInitializer",
+      "StaticPopupDialogs",
+      "StaticPopup_Show",
       "EventRegistry",
       "EXHAUSTION_TICK_OFFSET_Y",
       "GameTooltip",

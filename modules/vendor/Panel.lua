@@ -26,5 +26,9 @@ function vendor.RowChanged(key)
 end
 
 function vendor.BuildPanelImpl(page)
-  ns.settings.BuildModulePage(vendor, page, "Sells poor quality only, repairs all, each visit announced")
+  ns.settings.BuildModulePage(
+    vendor,
+    page,
+    "Sells poor quality only, asks about surplus, repairs all, each visit announced"
+  )
 end

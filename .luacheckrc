@@ -29,6 +29,7 @@ read_globals = {
   "CreateMacro", "EditMacro", "GetMacroInfo", "GetNumMacros",
   "CreateSettingsButtonInitializer",
   "CreateSettingsListSectionHeaderInitializer",
+  "StaticPopupDialogs", "StaticPopup_Show",
   "GameTooltip",
   "EventRegistry", "EXHAUSTION_TICK_OFFSET_Y",
   "GetAverageItemLevel", "GetInventoryItemLink", "GetMaxLevelForLatestExpansion", "GetMaxLevelForPlayerExpansion",

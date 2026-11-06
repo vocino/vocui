@@ -19,6 +19,7 @@ core/Sounds.lua
 core/Combat.lua
 core/Config.lua
 core/Inventory.lua
+core/Consumables.lua
 core/Guests.lua
 core/Prices.lua
 core/Modules.lua
@@ -46,5 +47,6 @@ modules/vendor/Vendor.lua
 modules/vendor/Panel.lua
 modules/vendor/Repair.lua
 modules/vendor/Sell.lua
+modules/vendor/Surplus.lua
 modules/vendor/Tooltip.lua
 modules/vendor/Plugins.lua

@@ -21,6 +21,7 @@ local CORE = {
   "core/Combat.lua",
   "core/Config.lua",
   "core/Inventory.lua",
+  "core/Consumables.lua",
   "core/Guests.lua",
   "core/Prices.lua",
   "core/Modules.lua",
@@ -2518,6 +2519,7 @@ local VENDOR = {
   "modules/vendor/Panel.lua",
   "modules/vendor/Repair.lua",
   "modules/vendor/Sell.lua",
+  "modules/vendor/Surplus.lua",
   "modules/vendor/Tooltip.lua",
   "modules/vendor/Plugins.lua",
 }
@@ -2640,7 +2642,7 @@ do
   end
   check(
     "vendor options present in order",
-    table.concat(keys, ",") == "enabled,sellJunk,autoRepair,guildFunds,audit,tooltipPrice"
+    table.concat(keys, ",") == "enabled,sellJunk,surplus,autoRepair,guildFunds,audit,tooltipPrice"
   )
   check("junk means poor quality only", vendor.ScanJunk()[1].link == "item:1")
   check("vendor help lines keep config second to last", ns.HELP[#ns.HELP - 1]:find("config", 1, true) ~= nil)
@@ -2946,12 +2948,12 @@ do
   end
   check(
     "panel registers the rows in order",
-    table.concat(keys, ",") == "enabled,sellJunk,autoRepair,guildFunds,audit,tooltipPrice"
+    table.concat(keys, ",") == "enabled,sellJunk,surplus,autoRepair,guildFunds,audit,tooltipPrice"
   )
   check("panel leads with the job", headers[1] == vendor.descriptor.job)
   check(
     "vendor groups its rows under headers",
-    headers[2] == "Sells poor quality only, repairs all, each visit announced"
+    headers[2] == "Sells poor quality only, asks about surplus, repairs all, each visit announced"
       and headers[3] == "At the merchant"
       and headers[4] == "Reporting"
   )
@@ -3094,13 +3096,15 @@ end
 -- level 10, an empty macro box, and the macro globals. Returns the
 -- box so tests can assert creates and rewrites.
 local CONSUMABLE_INFO = {
-  ["item:1"] = { "Loaf", 5, 5, "Food", nil, 0, 5 },
+  ["item:1"] = { "Loaf", 5, 5, "Food", nil, 0, 5, 5 },
   ["item:2"] = { "Tough Jerky", 8, 10, "Food", "Food", 0, 5 },
   ["item:3"] = { "Feast", 30, 20, "Food", "Food", 0, 5 },
   ["item:4"] = { "Crystal Water", 1, 1, "Drink", "Drink", 0, 5 },
   ["item:5"] = { "Healing Potion", 10, 8, "Potion", "Healing", 0, 1 },
   ["item:6"] = { "Mana Potion", 10, 8, "Potion", "Restore Mana", 0, 1 },
   ["item:7"] = { "Short Sword", 10, 1, "Sword", nil, 2, 7 },
+  ["item:8"] = { "Weak Water", 1, 1, "Drink", "Drink", 0, 5, 2 },
+  ["item:9"] = { "Lesser Healing Potion", 5, 5, "Potion", "Healing", 0, 1, 8 },
 }
 local function consumableWorld()
   local box = { acc = 0, char = 0, slots = {} }
@@ -3113,7 +3117,7 @@ local function consumableWorld()
       if not it then
         return nil
       end
-      return it[1], link, 1, it[2], it[3], "Consumable", it[4], 20, "", 134400, 0, it[6], it[7]
+      return it[1], link, 1, it[2], it[3], "Consumable", it[4], 20, "", 134400, it[8] or 0, it[6], it[7]
     end,
     GetItemSpell = function(link)
       local it = CONSUMABLE_INFO[link]
@@ -3263,40 +3267,39 @@ do
   check("no hook API means unavailable", bars.IsAvailable() == false)
 end
 
--- Bars consumables: category matchers behind the macro words.
+-- Consumables service: category matchers behind the macro words.
 do
   local ns = loadBars()
   ns.db = {}
-  local bars = ns.bars
+  local consumables = ns.consumables
   local function facts(name, classID, subclassID, spell)
     return { name = name, classID = classID, subclassID = subclassID, spell = spell, minLevel = 1, itemLevel = 1 }
   end
-  check("bread is food", bars.CategoryOf(facts("Tough Jerky", 0, 5, "Food")) == "food")
-  check("unworded food and drink is food", bars.CategoryOf(facts("Dalaran Sharp", 0, 5, nil)) == "food")
-  check("water is drink", bars.CategoryOf(facts("Conjured Crystal Water", 0, 5, "Drink")) == "drink")
-  check("healing potion is health", bars.CategoryOf(facts("Major Healing Potion", 0, 1, "Healing")) == "health")
-  check("mana potion is mana", bars.CategoryOf(facts("Major Mana Potion", 0, 1, "Restore Mana")) == "mana")
-  check("elixirs never match", bars.CategoryOf(facts("Elixir of Giants", 0, 2, "Elixir")) == nil)
-  check("bandages never match", bars.CategoryOf(facts("Heavy Linen Bandage", 0, 7, "First Aid")) == nil)
-  check("gear never matches", bars.CategoryOf(facts("Short Sword", 2, 7, nil)) == nil)
+  check("bread is food", consumables.CategoryOf(facts("Tough Jerky", 0, 5, "Food")) == "food")
+  check("unworded food and drink is food", consumables.CategoryOf(facts("Dalaran Sharp", 0, 5, nil)) == "food")
+  check("water is drink", consumables.CategoryOf(facts("Conjured Crystal Water", 0, 5, "Drink")) == "drink")
+  check("healing potion is health", consumables.CategoryOf(facts("Major Healing Potion", 0, 1, "Healing")) == "health")
+  check("mana potion is mana", consumables.CategoryOf(facts("Major Mana Potion", 0, 1, "Restore Mana")) == "mana")
+  check("elixirs never match", consumables.CategoryOf(facts("Elixir of Giants", 0, 2, "Elixir")) == nil)
+  check("bandages never match", consumables.CategoryOf(facts("Heavy Linen Bandage", 0, 7, "First Aid")) == nil)
+  check("gear never matches", consumables.CategoryOf(facts("Short Sword", 2, 7, nil)) == nil)
   check(
     "a potion matching both halves matches neither",
-    bars.CategoryOf(facts("Mana Healing Draught", 0, 1, "Odd Brew")) == nil
+    consumables.CategoryOf(facts("Mana Healing Draught", 0, 1, "Odd Brew")) == nil
   )
-  check("an unworded potion matches nothing", bars.CategoryOf(facts("Mysterious Vial", 0, 1, "Unknown")) == nil)
-  check("food and drink words together stay food", bars.CategoryOf(facts("Watery Soup", 0, 5, nil)) == "food")
+  check("an unworded potion matches nothing", consumables.CategoryOf(facts("Mysterious Vial", 0, 1, "Unknown")) == nil)
+  check("food and drink words together stay food", consumables.CategoryOf(facts("Watery Soup", 0, 5, nil)) == "food")
 end
 
--- Bars consumables: ranking picks the highest usable level.
+-- Consumables service: ranking picks the highest usable level.
 do
   local box = consumableWorld()
   local ns = loadBars()
   ns.db = {}
-  local bars = ns.bars
   ns.inventory.BagLinks = function()
     return { "item:1", "item:2", "item:3", "item:4", "item:5", "item:6", "item:7" }
   end
-  local best = bars.CollectBest()
+  local best = ns.consumables.CollectBest()
   check("highest usable food wins", best.food and best.food.name == "Tough Jerky")
   check("drink matched", best.drink and best.drink.name == "Crystal Water")
   check("health potion matched", best.health and best.health.name == "Healing Potion")
@@ -3444,6 +3447,241 @@ do
     bars.RowChanged("survey")
   end)
   check("the survey button lists the census", surveyed[1]:find("survey: 4 distinct", 1, true) ~= nil)
+  consumableTeardown()
+end
+
+-- Vendor surplus: worse consumables are found, asked about, and sold.
+do
+  vendorWorld()
+  consumableWorld()
+  local ns = loadVendor()
+  ns.db = {}
+  local vendor = ns.vendor
+  ns.inventory.BagLinks = function()
+    return { "item:2", "item:1", "item:4", "item:8", "item:5", "item:7" }
+  end
+  local slots = {
+    { 0, 1, 1, "item:2" },
+    { 0, 2, 2, "item:1" },
+    { 0, 3, 1, "item:4" },
+    { 0, 4, 1, "item:8" },
+    { 0, 5, 1, "item:5" },
+    { 0, 6, 1, "item:7" },
+  }
+  ns.inventory.EachSlot = function(fn)
+    for _, s in ipairs(slots) do
+      if fn(s[1], s[2], { stackCount = s[3] }, s[4]) then
+        break
+      end
+    end
+  end
+  local found = vendor.ScanSurplus()
+  check(
+    "surplus finds the worse stacks only",
+    #found == 2 and found[1].link == "item:1" and found[2].link == "item:8" and found[1].count == 2
+  )
+  check("surplus totals price times count", vendor.SurplusTotal(found) == 12)
+  local text = vendor.SurplusText(found, 12)
+  check(
+    "popup text asks with names and total",
+    text:find("Sell 2 worse stacks for 12c?", 1, true) ~= nil
+      and text:find("Loaf x2", 1, true) ~= nil
+      and text:find("Weak Water", 1, true) ~= nil
+  )
+  check("a full merchant world is available", vendor.IsAvailable() == true)
+  local savedItem = _G.C_Item
+  _G.C_Item = nil
+  check("missing item reads hide the module", vendor.IsAvailable() == false)
+  _G.C_Item = savedItem
+  consumableTeardown()
+end
+
+-- Vendor surplus: the ask pops once, declines stay quiet, accepts sell.
+do
+  vendorWorld()
+  consumableWorld()
+  local ns = loadVendor()
+  ns.db = {}
+  local vendor = ns.vendor
+  ns.inventory.BagLinks = function()
+    return { "item:2", "item:1", "item:4", "item:8", "item:5", "item:7" }
+  end
+  ns.inventory.EachSlot = function(fn)
+    local slots = {
+      { 0, 1, 1, "item:2" },
+      { 0, 2, 2, "item:1" },
+      { 0, 3, 1, "item:4" },
+      { 0, 4, 1, "item:8" },
+      { 0, 5, 1, "item:5" },
+      { 0, 6, 1, "item:7" },
+    }
+    for _, s in ipairs(slots) do
+      if fn(s[1], s[2], { stackCount = s[3] }, s[4]) then
+        break
+      end
+    end
+  end
+  local shown = {}
+  _G.StaticPopupDialogs = { GENERIC_CONFIRMATION = {} }
+  _G.StaticPopup_Show = function(which, _, _, data)
+    shown[#shown + 1] = { which = which, data = data }
+    return #shown
+  end
+  local found = vendor.ScanSurplus()
+  local asked = capturePrint(function()
+    vendor.AskSurplus(found)
+  end)
+  check("the ask shows one popup", #shown == 1 and shown[1].which == "GENERIC_CONFIRMATION" and #asked == 0)
+  check(
+    "the popup names the sale",
+    shown[1].data.text:find("Sell 2 worse stacks", 1, true) ~= nil and shown[1].data.acceptText == "Sell"
+  )
+  shown[1].data.cancelCallback()
+  local askedAgain = capturePrint(function()
+    vendor.AskSurplus(found)
+  end)
+  check("a decline stays quiet", #shown == 1 and #askedAgain == 0)
+  vendor.surplusDeclined = false
+  vendor.merchantOpen = true
+  local money = 1000
+  _G.GetMoney = function()
+    return money
+  end
+  local state = { ["0:2"] = "item:1", ["0:4"] = "item:8" }
+  _G.C_Container.GetContainerItemLink = function(bag, slot)
+    return state[bag .. ":" .. slot]
+  end
+  _G.C_Container.UseContainerItem = function(bag, slot)
+    local link = state[bag .. ":" .. slot]
+    if link == "item:1" then
+      money = money + 10
+    end
+    if link == "item:8" then
+      money = money + 2
+    end
+    state[bag .. ":" .. slot] = nil
+    return true
+  end
+  local said = capturePrint(function()
+    shown[1].data.callback()
+  end)
+  check("accept sells the listed stacks for the delta", said[#said]:find("sold 2 worse stacks for 12c", 1, true) ~= nil)
+  check("sold slots are empty", state["0:2"] == nil and state["0:4"] == nil)
+  _G.C_Container, _G.GetMoney, _G.StaticPopupDialogs, _G.StaticPopup_Show = nil, nil, nil, nil
+  consumableTeardown()
+end
+
+-- Vendor surplus: closed merchants and moved slots sell nothing.
+do
+  vendorWorld()
+  consumableWorld()
+  local ns = loadVendor()
+  ns.db = {}
+  local vendor = ns.vendor
+  ns.inventory.BagLinks = function()
+    return { "item:2", "item:1", "item:4", "item:8" }
+  end
+  ns.inventory.EachSlot = function(fn)
+    local slots = {
+      { 0, 1, 1, "item:2" },
+      { 0, 2, 1, "item:1" },
+      { 0, 3, 1, "item:4" },
+      { 0, 4, 1, "item:8" },
+    }
+    for _, s in ipairs(slots) do
+      if fn(s[1], s[2], { stackCount = s[3] }, s[4]) then
+        break
+      end
+    end
+  end
+  local found = vendor.ScanSurplus()
+  local money = 1000
+  _G.GetMoney = function()
+    return money
+  end
+  local state = { ["0:2"] = "item:1", ["0:4"] = "item:8" }
+  _G.C_Container.GetContainerItemLink = function(bag, slot)
+    return state[bag .. ":" .. slot]
+  end
+  _G.C_Container.UseContainerItem = function(bag, slot)
+    money = money + 1
+    state[bag .. ":" .. slot] = nil
+    return true
+  end
+  vendor.merchantOpen = false
+  local said = capturePrint(function()
+    vendor.SellSurplusNow(found)
+  end)
+  check(
+    "a closed merchant keeps everything",
+    said[1]:find("merchant closed", 1, true) ~= nil and state["0:2"] == "item:1"
+  )
+  vendor.merchantOpen = true
+  state["0:2"] = "item:2"
+  state["0:4"] = "item:4"
+  local quiet = capturePrint(function()
+    vendor.SellSurplusNow(found)
+  end)
+  check(
+    "moved slots are skipped silently",
+    state["0:2"] == "item:2" and state["0:4"] == "item:4" and money == 1000 and #quiet == 0
+  )
+  _G.C_Container, _G.GetMoney = nil, nil
+  consumableTeardown()
+end
+
+-- Vendor surplus: audit reports, live visits ask, the flag tracks open.
+do
+  vendorWorld()
+  consumableWorld()
+  local ns = loadVendor()
+  ns.db = {}
+  local vendor = ns.vendor
+  ns.inventory.BagLinks = function()
+    return { "item:2", "item:1", "item:4", "item:8", "item:5", "item:7" }
+  end
+  local slots = {
+    { 0, 1, 1, "item:2" },
+    { 0, 2, 2, "item:1" },
+    { 0, 3, 1, "item:4" },
+    { 0, 4, 1, "item:8" },
+    { 0, 5, 1, "item:5" },
+    { 0, 6, 1, "item:7" },
+  }
+  ns.inventory.EachSlot = function(fn)
+    for _, s in ipairs(slots) do
+      if fn(s[1], s[2], { stackCount = s[3] }, s[4]) then
+        break
+      end
+    end
+  end
+  local audited = capturePrint(function()
+    vendor.SurplusAudit(vendor.ScanSurplus())
+  end)
+  check(
+    "audit names the surplus and totals it",
+    audited[1]:find("audit: would sell", 1, true) ~= nil
+      and audited[#audited]:find("audit: 2 surplus stacks for 12c", 1, true) ~= nil
+  )
+  vendor.opts()
+  vendor.RepairNow = function() end
+  local shown = {}
+  _G.StaticPopupDialogs = { GENERIC_CONFIRMATION = {} }
+  _G.StaticPopup_Show = function(_, _, _, data)
+    shown[#shown + 1] = data
+    return true
+  end
+  ns.db.modules.vendor.audit = true
+  capturePrint(function()
+    vendor.OnMerchant()
+  end)
+  check("audit visits ask nothing", #shown == 0)
+  ns.db.modules.vendor.audit = false
+  capturePrint(function()
+    vendor.OnMerchant()
+  end)
+  check("live visits ask once with the flag open", #shown == 1 and vendor.merchantOpen == true)
+  _G.StaticPopupDialogs, _G.StaticPopup_Show = nil, nil
   consumableTeardown()
 end
 

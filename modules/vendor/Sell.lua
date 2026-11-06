@@ -123,13 +123,14 @@ function vendor.SellNow(found)
   return true
 end
 
--- One merchant visit: sell, then repair. Combat gates everything;
--- the merchant window closing unregisters nothing because nothing
--- listens past the show event.
+-- One merchant visit: sell, then ask about surplus, then repair. Combat gates everything;
+-- the close event only drops the open flag the confirmed sale
+-- rechecks before every slot.
 function vendor.OnMerchant()
   if not vendor.opts().enabled then
     return
   end
+  vendor.merchantOpen = true
   if ns.combat() then
     return
   end
@@ -142,6 +143,16 @@ function vendor.OnMerchant()
       end
     else
       vendor.SellNow(found)
+    end
+  end
+  if o.surplus then
+    local extra = vendor.ScanSurplus()
+    if #extra > 0 then
+      if o.audit then
+        vendor.SurplusAudit(extra)
+      else
+        vendor.AskSurplus(extra)
+      end
     end
   end
   if o.autoRepair then
