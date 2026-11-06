@@ -34,6 +34,7 @@
       "EditMacro",
       "GetMacroInfo",
       "GetNumMacros",
+      "CreateSettingsButtonInitializer",
       "CreateSettingsListSectionHeaderInitializer",
       "EventRegistry",
       "EXHAUSTION_TICK_OFFSET_Y",

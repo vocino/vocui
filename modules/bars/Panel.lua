@@ -12,7 +12,8 @@ bars.panelBuilt = false
 -- Settings control already made. Growth reads live on every buff-bar
 -- update, so only the toggles act: the module toggle registers or
 -- unregisters the viewer load waiter and the macro bag events, and any
--- macro row resyncs the macros at once.
+-- macro row resyncs the macros at once, and either action row runs
+-- its press (refresh sounds on, survey sounds open).
 function bars.RowChanged(key)
   if key == "enabled" then
     if bars.ApplyEnabledImpl then
@@ -30,6 +31,16 @@ function bars.RowChanged(key)
     end
     if bars.ResyncMacros then
       bars.ResyncMacros()
+    end
+  elseif key == "refresh" then
+    ns.play("on")
+    if bars.RefreshMacrosImpl then
+      bars.RefreshMacrosImpl()
+    end
+  elseif key == "survey" then
+    ns.play("open")
+    if bars.SurveyImpl then
+      bars.SurveyImpl()
     end
   end
 end

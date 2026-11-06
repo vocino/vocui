@@ -86,6 +86,24 @@ bars.OPTIONS = {
     label = "Mana potion macro",
     tooltip = "Maintain the VUI Mana macro",
   },
+  {
+    kind = "header",
+    label = "Actions",
+  },
+  {
+    kind = "button",
+    label = "Refresh macros",
+    button = "Refresh",
+    tooltip = "Point the food, drink and potion macros at the best in bags now",
+    action = "refresh",
+  },
+  {
+    kind = "button",
+    label = "Survey bags",
+    button = "Survey",
+    tooltip = "List bag consumables and their macro match",
+    action = "survey",
+  },
 }
 
 -- Validity predicate. The whole job is one secure hook onto the cooldown

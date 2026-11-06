@@ -62,6 +62,53 @@ end
 -- declare choices data the core turns into one. Anything else falls
 -- back to a checkbox. A row whose factory is missing builds nothing,
 -- never an error. Returns the initializer, or nil.
+-- One action button row for what no value row can express: an
+-- explicit action (refresh now, survey bags). Modules declare
+-- ({ kind = "button", label, button, tooltip, action }) and the core
+-- builds Blizzard's own button control through the native factory,
+-- so the control vocabulary still lives here exactly once
+-- (Principles #11). The press reports through the same change
+-- callback with the action; nothing is stored, so buttons hold no
+-- setting and register none. Returns the initializer, or nil.
+function settings.BuildButton(page, row, onAction, parentInit, isEnabled)
+  if type(page) ~= "table" or type(row) ~= "table" then
+    return nil
+  end
+  if type(row.label) ~= "string" or type(row.action) ~= "string" then
+    return nil
+  end
+  if type(CreateSettingsButtonInitializer) ~= "function" then
+    return nil
+  end
+  if not (SettingsPanel and type(SettingsPanel.GetLayout) == "function") then
+    return nil
+  end
+  local buttonText = row.label
+  if type(row.button) == "string" then
+    buttonText = row.button
+  end
+  local ok, initializer = pcall(CreateSettingsButtonInitializer, row.label, buttonText, function()
+    if type(onAction) == "function" then
+      onAction(row.action)
+    end
+  end, row.tooltip or "", true)
+  if not ok or initializer == nil then
+    return nil
+  end
+  pcall(function()
+    -- GetLayout takes the category in Blizzard's own code
+    -- (Blizzard_SettingsPanel.lua); the stub signature is short an argument.
+    ---@diagnostic disable-next-line: redundant-parameter
+    local layout = SettingsPanel:GetLayout(page)
+    layout:AddInitializer(initializer)
+  end)
+  if parentInit and type(initializer.SetParentInitializer) == "function" and type(isEnabled) == "function" then
+    -- Disabled, never hidden, while the module is off.
+    pcall(initializer.SetParentInitializer, initializer, parentInit, isEnabled)
+  end
+  return initializer
+end
+
 local function buildInitializer(page, setting, row)
   if type(Settings) ~= "table" then
     return nil
@@ -103,7 +150,10 @@ end
 -- each row, wires the value-changed callback so a change applies at
 -- once with no reload, and gates child rows on the enable toggle
 -- (disabled, never hidden). Header rows ({ kind = "header", label })
--- are plain section labels and register nothing. Returns how many
+-- are plain section labels and register nothing. Button rows
+-- ({ kind = "button", label, button, tooltip, action }) build
+-- Blizzard's own button control and report the press through the
+-- same change callback with the action. Returns how many
 -- control rows were built.
 function settings.BuildPage(page, tag, state, defaults, rows, isEnabled, onChange)
   if type(page) ~= "table" then
@@ -118,7 +168,11 @@ function settings.BuildPage(page, tag, state, defaults, rows, isEnabled, onChang
   local built = 0
   local parentInit = nil
   for _, row in ipairs(rows) do
-    if type(row) == "table" and row.kind == "header" and type(row.label) == "string" then
+    if type(row) == "table" and row.kind == "button" then
+      if settings.BuildButton(page, row, onChange, parentInit, isEnabled) then
+        built = built + 1
+      end
+    elseif type(row) == "table" and row.kind == "header" and type(row.label) == "string" then
       settings.AddNote(page, row.label)
     elseif type(row.key) == "string" then
       local setting = Settings.RegisterAddOnSetting(

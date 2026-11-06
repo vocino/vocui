@@ -27,6 +27,7 @@ read_globals = {
   "CooldownViewerBuffBarItemMixin",
   "CreateFrame",
   "CreateMacro", "EditMacro", "GetMacroInfo", "GetNumMacros",
+  "CreateSettingsButtonInitializer",
   "CreateSettingsListSectionHeaderInitializer",
   "GameTooltip",
   "EventRegistry", "EXHAUSTION_TICK_OFFSET_Y",

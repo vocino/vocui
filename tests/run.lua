@@ -395,6 +395,15 @@ do
   _G.CreateSettingsListSectionHeaderInitializer = function(text)
     return text
   end
+  local buttons = {}
+  _G.CreateSettingsButtonInitializer = function(name, buttonText, onClick, tooltip, addSearchTags)
+    local init = { name = name, buttonText = buttonText, tooltip = tooltip, addSearchTags = addSearchTags }
+    function init.SetParentInitializer(_, parent, gate)
+      init.parent, init.gate = parent, gate
+    end
+    buttons[#buttons + 1] = { init = init, click = onClick }
+    return init
+  end
   local ns = loadCore()
   ns.db = {}
   local changed = {}
@@ -417,6 +426,13 @@ do
           { value = "b", label = "Beta", tooltip = "Second" },
         },
       },
+      {
+        kind = "button",
+        label = "Survey bags",
+        button = "Survey",
+        tooltip = "List matches",
+        action = "survey",
+      },
     },
     function()
       return true
@@ -425,10 +441,10 @@ do
       changed[#changed + 1] = key
     end
   )
-  check("page builds the checkbox, slider, and dropdown rows", built == 3)
+  check("page builds the checkbox, slider, dropdown, and button rows", built == 4)
   check(
-    "section header adds a label and registers nothing",
-    #headers == 1 and headers[1] == "Group" and #registered == 3
+    "section header adds a label and the button adds its control",
+    #headers == 2 and headers[1] == "Group" and headers[2] == buttons[1].init and #registered == 3
   )
   local slider
   for _, c in ipairs(created) do
@@ -455,9 +471,24 @@ do
     "dropdown choices become the options",
     #picked == 2 and picked[1].value == "a" and picked[2].label == "Beta" and dropdown.tooltip == "Which"
   )
+  check(
+    "button carries its label, caption, tooltip, and search tags",
+    #buttons == 1
+      and buttons[1].init.name == "Survey bags"
+      and buttons[1].init.buttonText == "Survey"
+      and buttons[1].init.tooltip == "List matches"
+      and buttons[1].init.addSearchTags == true
+  )
   registered[1].callback()
+  buttons[1].click()
+  check("button presses call back with the action", changed[2] == "survey")
+  check(
+    "button rows gate on the toggle without storing anything",
+    buttons[1].init.parent ~= nil and type(buttons[1].init.gate) == "function" and #registered == 3
+  )
   check("row changes call back with the key", changed[1] == "enabled")
-  _G.Settings, _G.SettingsPanel, _G.CreateSettingsListSectionHeaderInitializer = nil, nil, nil
+  _G.Settings, _G.SettingsPanel, _G.CreateSettingsListSectionHeaderInitializer, _G.CreateSettingsButtonInitializer =
+    nil, nil, nil, nil
 end
 
 -- Settings.lua Init: an unavailable module gets no page
@@ -3383,6 +3414,36 @@ do
   bars.RowChanged("enabled")
   check("disabling the module unregisters the bag events", bars.macroFrame.events["BAG_UPDATE_DELAYED"] == nil)
   _G.hooksecurefunc, _G.CooldownViewerBuffBarItemMixin = nil, nil
+  consumableTeardown()
+end
+
+-- Bars actions: the page buttons refresh and survey without slash.
+do
+  local box = consumableWorld()
+  local ns = loadBars()
+  ns.db = {}
+  local bars = ns.bars
+  ns.inventory.BagLinks = function()
+    return { "item:2", "item:4", "item:5", "item:6" }
+  end
+  local actions = {}
+  for _, row in ipairs(bars.OPTIONS) do
+    if type(row) == "table" and row.kind == "button" then
+      actions[#actions + 1] = row.action
+    end
+  end
+  check("page buttons declare refresh and survey", table.concat(actions, ",") == "refresh,survey")
+  local refreshed = capturePrint(function()
+    bars.RowChanged("refresh")
+  end)
+  check(
+    "the refresh button points the macros now",
+    box.char == 4 and refreshed[#refreshed]:find("macros: food Tough Jerky", 1, true) ~= nil
+  )
+  local surveyed = capturePrint(function()
+    bars.RowChanged("survey")
+  end)
+  check("the survey button lists the census", surveyed[1]:find("survey: 4 distinct", 1, true) ~= nil)
   consumableTeardown()
 end
 
