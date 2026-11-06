@@ -3211,17 +3211,27 @@ do
   local ns = loadBars()
   ns.db = {}
   local bars = ns.bars
-  local item, bar, tex = stubBar({ value = 40 })
+  local item, _, tex = stubBar({ value = 40 })
   check(
     "center anchors half the fill each way",
-    bars.ApplyFill(item) == true and #tex.points == 4 and tex.points[3][1] == "LEFT" and tex.points[3][2] == "CENTER"
-      and tex.points[3][3] == -40 and tex.points[4][1] == "RIGHT" and tex.points[4][2] == "CENTER" and tex.points[4][3] == 40
+    bars.ApplyFill(item) == true
+      and #tex.points == 4
+      and tex.points[3][1] == "LEFT"
+      and tex.points[3][2] == "CENTER"
+      and tex.points[3][3] == -40
+      and tex.points[4][1] == "RIGHT"
+      and tex.points[4][2] == "CENTER"
+      and tex.points[4][3] == 40
   )
   ns.db.modules.bars.growth = "right"
   check(
     "right pins the fill to the right edge",
-    bars.ApplyFill(item) == true and tex.points[3][1] == "LEFT" and tex.points[3][2] == "RIGHT"
-      and tex.points[3][3] == -80 and tex.points[4][1] == "RIGHT" and tex.points[4][2] == "RIGHT"
+    bars.ApplyFill(item) == true
+      and tex.points[3][1] == "LEFT"
+      and tex.points[3][2] == "RIGHT"
+      and tex.points[3][3] == -80
+      and tex.points[4][1] == "RIGHT"
+      and tex.points[4][2] == "RIGHT"
   )
   ns.db.modules.bars.growth = "left"
   check(

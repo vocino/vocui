@@ -47,7 +47,14 @@ function bars.ApplyFill(item)
   if type(bar) ~= "table" then
     return false
   end
-  for _, method in ipairs({ "GetStatusBarTexture", "GetMinMaxValues", "GetValue", "GetWidth", "GetHeight", "GetOrientation" }) do
+  for _, method in ipairs({
+    "GetStatusBarTexture",
+    "GetMinMaxValues",
+    "GetValue",
+    "GetWidth",
+    "GetHeight",
+    "GetOrientation",
+  }) do
     if type(bar[method]) ~= "function" then
       return false
     end

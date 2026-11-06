@@ -64,3 +64,52 @@ jobs:
 
       - name: Package and release
         uses: BigWigsMods/packager@v2
+
+      # Deterministic changelog (wiki/Toolchain.md): one formatter
+      # feeds both the GitHub release notes and the Discord embed, so
+      # the two surfaces always carry the same bullets. Commits
+      # counted are the ones between the previous version tag and
+      # this tag; a first tag with no predecessor counts everything.
+      - name: Generate changelog
+        id: changelog
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          PREV="$(git tag --list 'v[0-9]*' --sort=v:refname | grep -B1 -x "${TAG}" | head -n 1 || true)"
+          if [ -z "${PREV}" ] || [ "${PREV}" = "${TAG}" ]; then
+            PREV="$(git rev-list --max-parents=0 HEAD)"
+          fi
+          bash tools/changelog.sh "${PREV}" "${TAG}" "${TAG}" modules /tmp/release-notes.md /tmp/release-desc.txt
+          if [ -s /tmp/release-notes.md ]; then
+            echo "has-notes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-notes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The packager already published the release above; this only
+      # replaces its notes body with the same text the embed carries.
+      # No player-facing commits means no edit: the release ships
+      # with the packager notes as before.
+      - name: Set release notes
+        if: steps.changelog.outputs.has-notes == 'true'
+        run: gh release edit "${GITHUB_REF_NAME}" --notes-file /tmp/release-notes.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # One embed under the name VocUI. A Discord failure warns and
+      # the release still completes; an empty secret skips with a
+      # warning. Nothing posts on untagged pushes: this workflow only
+      # runs on version tags.
+      - name: Post changelog to Discord
+        if: steps.changelog.outputs.has-notes == 'true'
+        run: |
+          URL="${{ secrets.DISCORD_CHANGELOG_WEBHOOK }}"
+          if [ -z "${URL}" ]; then
+            echo "::warning::DISCORD_CHANGELOG_WEBHOOK is empty; skipping the changelog post."
+            exit 0
+          fi
+          TITLE="VocUI ${GITHUB_REF_NAME}"
+          LINK="https://github.com/${{ github.repository }}/releases/tag/${GITHUB_REF_NAME}"
+          PAYLOAD="$(jq -n --arg u 'VocUI' --arg t "${TITLE}" --arg l "${LINK}" --arg d "$(cat /tmp/release-desc.txt)" \
+            '{username: $u, embeds: [{title: $t, url: $l, description: $d, color: 16765184}]}')" # 16765184 = 0xFFD100 gold
+          curl -fsSL -m 30 -X POST -H 'Content-Type: application/json' -d "${PAYLOAD}" "${URL}" \
+            || echo "::warning::Discord changelog post failed; the release itself is unaffected."
