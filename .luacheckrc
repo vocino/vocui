@@ -26,6 +26,7 @@ read_globals = {
   "C_SpecializationInfo", "C_Timer",
   "CooldownViewerBuffBarItemMixin",
   "CreateFrame",
+  "CreateMacro", "EditMacro", "GetMacroInfo", "GetNumMacros",
   "CreateSettingsListSectionHeaderInitializer",
   "GameTooltip",
   "EventRegistry", "EXHAUSTION_TICK_OFFSET_Y",

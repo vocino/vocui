@@ -2995,6 +2995,7 @@ end
 -- from the center instead of the native left-to-right fill.
 local BARS = {
   "modules/bars/Bars.lua",
+  "modules/bars/Consumables.lua",
   "modules/bars/Grow.lua",
   "modules/bars/Panel.lua",
 }
@@ -3058,6 +3059,75 @@ local function stubBar(o)
   return item, bar, tex
 end
 
+-- A stub bag world for the consumable tests: canned item facts at
+-- level 10, an empty macro box, and the macro globals. Returns the
+-- box so tests can assert creates and rewrites.
+local CONSUMABLE_INFO = {
+  ["item:1"] = { "Loaf", 5, 5, "Food", nil, 0, 5 },
+  ["item:2"] = { "Tough Jerky", 8, 10, "Food", "Food", 0, 5 },
+  ["item:3"] = { "Feast", 30, 20, "Food", "Food", 0, 5 },
+  ["item:4"] = { "Crystal Water", 1, 1, "Drink", "Drink", 0, 5 },
+  ["item:5"] = { "Healing Potion", 10, 8, "Potion", "Healing", 0, 1 },
+  ["item:6"] = { "Mana Potion", 10, 8, "Potion", "Restore Mana", 0, 1 },
+  ["item:7"] = { "Short Sword", 10, 1, "Sword", nil, 2, 7 },
+}
+local function consumableWorld()
+  local box = { acc = 0, char = 0, slots = {} }
+  _G.UnitLevel = function()
+    return 10
+  end
+  _G.C_Item = {
+    GetItemInfo = function(link)
+      local it = CONSUMABLE_INFO[link]
+      if not it then
+        return nil
+      end
+      return it[1], link, 1, it[2], it[3], "Consumable", it[4], 20, "", 134400, 0, it[6], it[7]
+    end,
+    GetItemSpell = function(link)
+      local it = CONSUMABLE_INFO[link]
+      if not it or not it[5] then
+        return nil
+      end
+      return it[5], 1
+    end,
+  }
+  _G.GetNumMacros = function()
+    return box.acc, box.char
+  end
+  _G.GetMacroInfo = function(i)
+    local m = box.slots[i]
+    if not m then
+      return nil
+    end
+    return m.name, m.icon, m.body
+  end
+  _G.CreateMacro = function(name, icon, body)
+    box.char = box.char + 1
+    local index = 120 + box.char
+    box.slots[index] = { name = name, icon = icon, body = body }
+    return index
+  end
+  _G.EditMacro = function(i, _, icon, body)
+    local m = box.slots[i]
+    if not m then
+      return nil
+    end
+    if icon ~= nil then
+      m.icon = icon
+    end
+    if body ~= nil then
+      m.body = body
+    end
+    return i
+  end
+  return box
+end
+local function consumableTeardown()
+  _G.UnitLevel, _G.C_Item, _G.GetNumMacros, _G.GetMacroInfo, _G.CreateMacro, _G.EditMacro, _G.InCombatLockdown =
+    nil, nil, nil, nil, nil, nil, nil
+end
+
 -- Bars: descriptor, state location, Forever-only options
 do
   local w = barsWorld()
@@ -3071,7 +3141,15 @@ do
   )
   check(
     "bars state lives under modules.bars",
-    type(ns.db.modules) == "table" and ns.db.modules.bars.enabled == true and ns.db.modules.bars.growth == "center" and ns.db.bars == nil
+    type(ns.db.modules) == "table"
+      and ns.db.modules.bars.enabled == true
+      and ns.db.modules.bars.growth == "center"
+      and ns.db.modules.bars.consumables == true
+      and ns.db.modules.bars.food == true
+      and ns.db.modules.bars.drink == true
+      and ns.db.modules.bars.health == true
+      and ns.db.modules.bars.mana == true
+      and ns.db.bars == nil
   )
   local keys = {}
   for _, row in ipairs(bars.OPTIONS) do
@@ -3081,7 +3159,8 @@ do
   end
   check(
     "bars options present",
-    table.concat(keys, ",") == "enabled,growth" and ns.db.modules.bars.growth == "center"
+    table.concat(keys, ",") == "enabled,growth,consumables,food,drink,health,mana"
+      and ns.db.modules.bars.growth == "center"
   )
   check(
     "bars help lines keep config second to last",
@@ -3151,6 +3230,160 @@ do
   check("no viewer means no hook yet", later.bars.InstallHook() == false and later.bars.hooked ~= true)
   _G.hooksecurefunc, _G.CooldownViewerBuffBarItemMixin = nil, nil
   check("no hook API means unavailable", bars.IsAvailable() == false)
+end
+
+-- Bars consumables: category matchers behind the macro words.
+do
+  local ns = loadBars()
+  ns.db = {}
+  local bars = ns.bars
+  local function facts(name, classID, subclassID, spell)
+    return { name = name, classID = classID, subclassID = subclassID, spell = spell, minLevel = 1, itemLevel = 1 }
+  end
+  check("bread is food", bars.CategoryOf(facts("Tough Jerky", 0, 5, "Food")) == "food")
+  check("unworded food and drink is food", bars.CategoryOf(facts("Dalaran Sharp", 0, 5, nil)) == "food")
+  check("water is drink", bars.CategoryOf(facts("Conjured Crystal Water", 0, 5, "Drink")) == "drink")
+  check("healing potion is health", bars.CategoryOf(facts("Major Healing Potion", 0, 1, "Healing")) == "health")
+  check("mana potion is mana", bars.CategoryOf(facts("Major Mana Potion", 0, 1, "Restore Mana")) == "mana")
+  check("elixirs never match", bars.CategoryOf(facts("Elixir of Giants", 0, 2, "Elixir")) == nil)
+  check("bandages never match", bars.CategoryOf(facts("Heavy Linen Bandage", 0, 7, "First Aid")) == nil)
+  check("gear never matches", bars.CategoryOf(facts("Short Sword", 2, 7, nil)) == nil)
+  check(
+    "a potion matching both halves matches neither",
+    bars.CategoryOf(facts("Mana Healing Draught", 0, 1, "Odd Brew")) == nil
+  )
+  check("an unworded potion matches nothing", bars.CategoryOf(facts("Mysterious Vial", 0, 1, "Unknown")) == nil)
+  check("food and drink words together stay food", bars.CategoryOf(facts("Watery Soup", 0, 5, nil)) == "food")
+end
+
+-- Bars consumables: ranking picks the highest usable level.
+do
+  local box = consumableWorld()
+  local ns = loadBars()
+  ns.db = {}
+  local bars = ns.bars
+  ns.inventory.BagLinks = function()
+    return { "item:1", "item:2", "item:3", "item:4", "item:5", "item:6", "item:7" }
+  end
+  local best = bars.CollectBest()
+  check("highest usable food wins", best.food and best.food.name == "Tough Jerky")
+  check("drink matched", best.drink and best.drink.name == "Crystal Water")
+  check("health potion matched", best.health and best.health.name == "Healing Potion")
+  check("mana potion matched", best.mana and best.mana.name == "Mana Potion")
+  check("the macro box is untouched by a ranking look", box.char == 0)
+  consumableTeardown()
+end
+
+-- Bars consumables: macro create, retarget, empty, combat, and slots.
+do
+  local box = consumableWorld()
+  local ns = loadBars()
+  ns.db = {}
+  local bars = ns.bars
+  ns.inventory.BagLinks = function()
+    return { "item:2", "item:4", "item:5", "item:6" }
+  end
+  local said = capturePrint(function()
+    bars.ResyncMacros()
+  end)
+  check("first look creates four macros", box.char == 4 and #said == 4)
+  local saidAgain = capturePrint(function()
+    bars.ResyncMacros()
+  end)
+  check("an unchanged look stays silent", box.char == 4 and #saidAgain == 0)
+  ns.inventory.BagLinks = function()
+    return { "item:1", "item:4", "item:5", "item:6" }
+  end
+  local retarget = capturePrint(function()
+    bars.ResyncMacros()
+  end)
+  local food = bars.FindMacro("VUI Food")
+  check("a new best rewrites the macro silently", food and food.body:find("Loaf", 1, true) ~= nil and #retarget == 0)
+  ns.inventory.BagLinks = function()
+    return { "item:4", "item:5", "item:6" }
+  end
+  local empty = capturePrint(function()
+    bars.ResyncMacros()
+  end)
+  check("an empty category keeps its macro and says so once", #empty == 1 and bars.FindMacro("VUI Food") ~= nil)
+  local emptyAgain = capturePrint(function()
+    bars.ResyncMacros()
+  end)
+  check("empty stays quiet after the first line", #emptyAgain == 0)
+  _G.InCombatLockdown = function()
+    return true
+  end
+  check("combat only pends", bars.ResyncMacros() == false and bars.macroPending == true)
+  _G.InCombatLockdown = nil
+  bars.InitMacrosImpl()
+  ns.inventory.BagLinks = function()
+    return { "item:2", "item:4", "item:5", "item:6" }
+  end
+  capturePrint(function()
+    bars.macroFrame.scripts["OnEvent"]()
+  end)
+  local flushed = bars.FindMacro("VUI Food")
+  check(
+    "the regen event flushes the pending look",
+    bars.macroPending == false and flushed and flushed.body:find("Tough Jerky", 1, true) ~= nil
+  )
+  box.slots, box.acc, box.char = {}, 0, 30
+  _G.CreateMacro = function()
+    return nil
+  end
+  bars.macroSaid.slots = nil
+  local full = capturePrint(function()
+    bars.ResyncMacros()
+  end)
+  check("full macro slots say so once", #full == 1)
+  consumableTeardown()
+end
+
+-- Bars consumables: events follow the toggle, slash refreshes and surveys.
+do
+  barsWorld()
+  local box = consumableWorld()
+  local ns = loadBars()
+  ns.db = {}
+  ns.modules.InitAll()
+  local bars = ns.bars
+  check(
+    "macro bag events register with the toggle",
+    bars.macroFrame ~= nil
+      and bars.macroFrame.events["BAG_UPDATE_DELAYED"] == true
+      and bars.macroFrame.events["PLAYER_REGEN_ENABLED"] == true
+  )
+  ns.db.modules.bars.consumables = false
+  bars.ApplyMacrosImpl()
+  check("disabling macros unregisters the bag events", bars.macroFrame.events["BAG_UPDATE_DELAYED"] == nil)
+  ns.db.modules.bars.consumables = true
+  bars.ApplyMacrosImpl()
+  ns.inventory.BagLinks = function()
+    return { "item:2", "item:4", "item:5", "item:6" }
+  end
+  local refreshed = capturePrint(function()
+    bars.Slash("refresh")
+  end)
+  check(
+    "refresh reports where the macros point",
+    refreshed[#refreshed]:find("macros: food Tough Jerky", 1, true) ~= nil and box.char == 4
+  )
+  local surveyed = capturePrint(function()
+    bars.Slash("survey")
+  end)
+  check(
+    "survey names the census and a match",
+    surveyed[1]:find("survey: 4 distinct", 1, true) ~= nil and surveyed[2]:find("Tough Jerky", 1, true) ~= nil
+  )
+  local bogus = capturePrint(function()
+    bars.Slash("bogus")
+  end)
+  check("a typo prints help", bogus[1]:find("commands", 1, true) ~= nil)
+  ns.db.modules.bars.enabled = false
+  bars.RowChanged("enabled")
+  check("disabling the module unregisters the bag events", bars.macroFrame.events["BAG_UPDATE_DELAYED"] == nil)
+  _G.hooksecurefunc, _G.CooldownViewerBuffBarItemMixin = nil, nil
+  consumableTeardown()
 end
 
 print(string.format("%d passed, %d failed", pass, fail))

@@ -15,6 +15,11 @@ bars.SECTION = "modules.bars"
 bars.defaults = {
   enabled = true,
   growth = "center",
+  consumables = true,
+  food = true,
+  drink = true,
+  health = true,
+  mana = true,
 }
 
 -- The live state table: VocUIDB.modules.bars and nowhere else.
@@ -29,8 +34,8 @@ bars.OPTIONS = {
   {
     key = "enabled",
     kind = "checkbox",
-    label = "Restyle cooldown bars",
-    tooltip = "Grow cooldown buff bars from the chosen edge",
+    label = "Enable the bars module",
+    tooltip = "Turns off the cooldown fill and the consumable macros",
   },
   {
     kind = "header",
@@ -46,6 +51,40 @@ bars.OPTIONS = {
       { value = "left", label = "Left" },
       { value = "right", label = "Right" },
     },
+  },
+  {
+    kind = "header",
+    label = "Macros",
+  },
+  {
+    key = "consumables",
+    kind = "checkbox",
+    label = "Maintain consumable macros",
+    tooltip = "Keep the food, drink and potion macros pointed at the best in bags",
+  },
+  {
+    key = "food",
+    kind = "checkbox",
+    label = "Food macro",
+    tooltip = "Maintain the VUI Food macro",
+  },
+  {
+    key = "drink",
+    kind = "checkbox",
+    label = "Drink macro",
+    tooltip = "Maintain the VUI Drink macro",
+  },
+  {
+    key = "health",
+    kind = "checkbox",
+    label = "Health potion macro",
+    tooltip = "Maintain the VUI Health macro",
+  },
+  {
+    key = "mana",
+    kind = "checkbox",
+    label = "Mana potion macro",
+    tooltip = "Maintain the VUI Mana macro",
   },
 }
 
@@ -94,6 +133,12 @@ function bars.SetEnabled(on)
   if bars.ApplyEnabledImpl then
     bars.ApplyEnabledImpl()
   end
+  if bars.ApplyMacrosImpl then
+    bars.ApplyMacrosImpl()
+  end
+  if on and bars.ResyncMacros then
+    bars.ResyncMacros()
+  end
 end
 
 function bars.ToggleEnabled()
@@ -114,6 +159,9 @@ end
 
 function bars.InitImpl()
   bars.ApplyEnabledImpl()
+  if bars.InitMacrosImpl then
+    bars.InitMacrosImpl()
+  end
 end
 
 function bars.Slash(rest)
@@ -124,6 +172,14 @@ function bars.Slash(rest)
     bars.SetEnabled(true)
   elseif cmd == "off" then
     bars.SetEnabled(false)
+  elseif cmd == "refresh" then
+    if bars.RefreshMacrosImpl then
+      bars.RefreshMacrosImpl()
+    end
+  elseif cmd == "survey" then
+    if bars.SurveyImpl then
+      bars.SurveyImpl()
+    end
   else
     ns.help()
   end
@@ -134,7 +190,7 @@ end
 local descriptor = {
   name = "bars",
   title = "Bars",
-  job = "Customizes action bars and the cooldown manager, starting with cooldown buff bars that grow from the center",
+  job = "Grows cooldown buff bars from the center and keeps food, drink and potion macros pointed at the best in bags",
   default = true,
   IsAvailable = bars.IsAvailable,
   init = function()
@@ -158,6 +214,8 @@ do
   local lines = {
     "/vui bars          turn the bars module on or off",
     "/vui bars on|off   turn the bars module on or off",
+    "/vui bars refresh   point the macros at the best in bags now",
+    "/vui bars survey    list bag consumables and their macro match",
   }
   local at = #ns.HELP - 2 -- ahead of the config line (second to last)
   for i, line in ipairs(lines) do

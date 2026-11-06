@@ -4,3 +4,4 @@
 # on Windows. Shell scripts stay out: GNU bash reads them, and it
 # wants the LF it already gets on Linux.
 *.lua text eol=crlf
+*.sh text eol=lf

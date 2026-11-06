@@ -10,12 +10,26 @@ bars.panelBuilt = false
 
 -- What a row does when its value changes, beyond the store write the
 -- Settings control already made. Growth reads live on every buff-bar
--- update, so only the toggle acts: it registers or unregisters the
--- viewer load waiter.
+-- update, so only the toggles act: the module toggle registers or
+-- unregisters the viewer load waiter and the macro bag events, and any
+-- macro row resyncs the macros at once.
 function bars.RowChanged(key)
   if key == "enabled" then
     if bars.ApplyEnabledImpl then
       bars.ApplyEnabledImpl()
+    end
+    if bars.ApplyMacrosImpl then
+      bars.ApplyMacrosImpl()
+    end
+    if bars.ResyncMacros then
+      bars.ResyncMacros()
+    end
+  elseif bars.IsMacroKey and bars.IsMacroKey(key) then
+    if bars.ApplyMacrosImpl then
+      bars.ApplyMacrosImpl()
+    end
+    if bars.ResyncMacros then
+      bars.ResyncMacros()
     end
   end
 end
