@@ -937,6 +937,14 @@ do
   check("pre-40 leveling armor passes", gear.Evaluate("leather").upgrade == true)
   w.level = 50
   check("post-40 leveling armor refused", gear.Evaluate("leather").upgrade == false)
+  -- Best armor waits until 40: a pre-40 hunter refuses mail, a 50 wears it.
+  addItem(w, "leatherworn", { equipLoc = "INVTYPE_CHEST", ilvl = 10, classID = 4, subclassID = 2 })
+  addItem(w, "mailbag", { equipLoc = "INVTYPE_CHEST", ilvl = 99, classID = 4, subclassID = 3 })
+  w.equipped[5] = "leatherworn"
+  w.level = 30
+  check("pre-40 best armor refused", gear.Evaluate("mailbag").upgrade == false)
+  w.level = 50
+  check("post-40 best armor passes", gear.Evaluate("mailbag").upgrade == true)
 end
 
 -- Gear evaluate: relics, thrown, and never-gear on the ranged slot
@@ -2006,7 +2014,10 @@ do
   local xp = ns.xp
   check(
     "registry holds the verified food buff",
-    #xp.REGISTRY == 1 and xp.REGISTRY[1].aura == 24870 and xp.REGISTRY[1].food == true
+    #xp.REGISTRY == 1
+      and xp.REGISTRY[1].aura == 24870
+      and xp.REGISTRY[1].name == "Well Fed"
+      and xp.REGISTRY[1].food == true
   )
   check("no apis means no active lines", #xp.bonusParts("xp") == 0)
   local missing = xp.missingParts("xp")
@@ -2052,6 +2063,24 @@ do
   check("allowed stamps keep their time", xp.auraTimeLeft(24870) == 1500)
   _G.canaccessvalue = nil
   check("no guard keeps the old read", xp.auraTimeLeft(24870) == 1500)
+  -- Any food's Well Fed answers to the name, not just the one spell ID:
+  -- the ID read is blind here, the name read sees the buff.
+  _G.C_UnitAuras = {
+    GetPlayerAuraBySpellID = function(id)
+      return nil
+    end,
+    GetAuraDataBySpellName = function(unit, spellName)
+      if unit == "player" and spellName == "Well Fed" then
+        return { expirationTime = 2500 }
+      end
+      return nil
+    end,
+  }
+  local named = xp.bonusParts("xp")
+  check(
+    "a different food's Well Fed still shows",
+    named[1] == "Well Fed · kill XP (25m left)" and #xp.missingParts("xp") == 0
+  )
   _G.IsInInstance = function()
     return true
   end

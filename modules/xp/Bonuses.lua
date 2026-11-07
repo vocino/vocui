@@ -18,7 +18,8 @@ local xp = ns.xp
 -- bar's own reach lines already report it.
 xp.REGISTRY = {
   {
-    aura = 24870, -- Well Fed, the eat-triggered food aura (Wowhead Era lead: classic spell 24870)
+    aura = 24870, -- one food's spell (Wowhead Era lead: classic spell 24870); the name read below finds every food's
+    name = "Well Fed", -- every food's buff shares the name, so the name query sees them all
     label = "Well Fed",
     grant = "kill XP",
     source = "food",
@@ -40,6 +41,44 @@ function xp.hasAura(spellID)
   return xp.playerAura(spellID) ~= nil
 end
 
+-- Name-based read: every food grants its own Well Fed spell, so one ID
+-- only ever covers one dish. The name query
+-- (C_UnitAuras.GetAuraDataBySpellName, documented on the forever branch)
+-- finds whichever food's buff is live. Presence-gated and pcall-guarded
+-- like every other read here; nil when the API is absent or refuses.
+function xp.playerAuraByName(spellName)
+  if type(C_UnitAuras) ~= "table" then
+    return nil
+  end
+  if type(C_UnitAuras.GetAuraDataBySpellName) ~= "function" then
+    return nil
+  end
+  local ok, aura = pcall(C_UnitAuras.GetAuraDataBySpellName, "player", spellName)
+  if not ok then
+    return nil
+  end
+  return aura
+end
+
+-- One entry, every food: the name read finds any live Well Fed, and the
+-- ID stays as the fallback (spell names are client-locale, IDs are not).
+function xp.entryAura(entry)
+  if type(entry) ~= "table" then
+    return nil
+  end
+  if entry.name then
+    local named = xp.playerAuraByName(entry.name)
+    if named ~= nil then
+      return named
+    end
+  end
+  return xp.playerAura(entry.aura)
+end
+
+function xp.hasEntryAura(entry)
+  return xp.entryAura(entry) ~= nil
+end
+
 -- Remaining time on a live aura, in seconds, or nil when the client does
 -- not report one. Blizzard's own BuffFrame reads auraData.expirationTime
 -- against GetTime() the same way (forever branch, BuffFrame.lua); a
@@ -47,8 +86,8 @@ end
 -- read no time, never an error. The stamp can also arrive secret,
 -- and a secret errors on compare and arithmetic in addon code:
 -- canaccessvalue gates both, presence-gated like every other read.
-function xp.auraTimeLeft(spellID)
-  local aura = xp.playerAura(spellID)
+local function timeLeft(aura)
+  -- the aura arrives resolved by the caller; only its stamp is read here
   if type(aura) ~= "table" then
     return nil
   end
@@ -67,6 +106,14 @@ function xp.auraTimeLeft(spellID)
     return nil
   end
   return left
+end
+
+function xp.auraTimeLeft(spellID)
+  return timeLeft(xp.playerAura(spellID))
+end
+
+function xp.entryTimeLeft(entry)
+  return timeLeft(xp.entryAura(entry))
 end
 
 -- Food in the player's bags, through the core's inventory service and its
@@ -182,8 +229,8 @@ function xp.bonusParts(mode, repBonus)
   end
   if not xp.inInstance() then
     for _, entry in ipairs(xp.REGISTRY) do
-      if xp.hasAura(entry.aura) then
-        local left = xp.auraTimeLeft(entry.aura)
+      if xp.hasEntryAura(entry) then
+        local left = xp.entryTimeLeft(entry)
         if left then
           add(nil, entry.label .. " · " .. entry.grant .. " (" .. xp.formatEta(left) .. " left)")
         else
@@ -217,7 +264,7 @@ function xp.missingParts(mode)
   end
   local bagged = nil
   for _, entry in ipairs(xp.REGISTRY) do
-    if not xp.hasAura(entry.aura) then
+    if not xp.hasEntryAura(entry) then
       local hint = "eat " .. entry.source
       if entry.food then
         if bagged == nil then

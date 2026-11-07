@@ -168,7 +168,7 @@ gear.RELIC_CLASS = { [7] = "PALADIN", [8] = "DRUID", [9] = "SHAMAN", [10] = "DEA
 -- Leveling armor for transitioning classes: hunters and shamans wear
 -- leather until 40, warriors and paladins wear mail until 40 (classic
 -- rule; best armor unlocks at 40). Below 40 a candidate of the leveling
--- type passes like the best type.
+-- type passes like the best type; the best type itself waits until 40.
 gear.ARMOR_LEVELING = { WARRIOR = 3, PALADIN = 3, HUNTER = 2, SHAMAN = 2 }
 gear.ARMOR_TRANSITION_LEVEL = 40
 
@@ -189,11 +189,18 @@ function gear.ArmorBestBuiltin(link)
   end
   local _, classKey = UnitClass("player")
   local best = classKey and gear.ARMOR_BEST[classKey]
-  if best and subclassID == best then
-    return true
-  end
   local leveling = classKey and gear.ARMOR_LEVELING[classKey]
-  if leveling and subclassID == leveling and (UnitLevel("player") or 0) < gear.ARMOR_TRANSITION_LEVEL then
+  local playerLevel = (UnitLevel("player") or 0)
+  if best and subclassID == best then
+    -- Transitioning classes (hunter, shaman, warrior, paladin) earn
+    -- their best armor at the transition level; before that only the
+    -- leveling type passes, so a pre-40 mail chest never equips on a
+    -- hunter that cannot wear it yet.
+    if not leveling or playerLevel >= gear.ARMOR_TRANSITION_LEVEL then
+      return true
+    end
+  end
+  if leveling and subclassID == leveling and playerLevel < gear.ARMOR_TRANSITION_LEVEL then
     return true
   end
   -- Relics answer to their class, not to armor weight: a paladin's
