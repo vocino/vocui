@@ -21,5 +21,5 @@ function chat.RowChanged(key)
 end
 
 function chat.BuildPanelImpl(page)
-  ns.settings.BuildModulePage(chat, page, "Lines starting with (( stay untouched, emotes never change")
+  ns.settings.BuildModulePage(chat, page, "Only /say and /yell change; (( lines and emotes never do")
 end

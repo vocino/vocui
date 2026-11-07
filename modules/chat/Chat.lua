@@ -12,7 +12,7 @@ ns.chat = chat
 -- of its own (Principles #7: guests are welcome but never required).
 -- The 2007 Dwarvenizer/Trollizer global hook could not survive that
 -- move, so only its behavior crossed over: two dialect tables, a
--- chance slider, per-channel toggles, and the (( escape hatch.
+-- chance slider, say/yell toggles, and the (( escape hatch.
 -- Emotes never change.
 
 chat.SECTION = "modules.chat"
@@ -25,12 +25,7 @@ chat.defaults = {
   dialect = "dwarf",
   chance = 8,
   say = true,
-  whisper = true,
-  channel = true,
-  party = false,
-  guild = false,
   yell = true,
-  raid = false,
 }
 
 -- The live state table: VocUIDB.modules.chat and nowhere else.
@@ -88,36 +83,6 @@ chat.OPTIONS = {
     label = "Yell",
     tooltip = "Rewrite /yell chat",
   },
-  {
-    key = "whisper",
-    kind = "checkbox",
-    label = "Whisper",
-    tooltip = "Rewrite sent whispers",
-  },
-  {
-    key = "channel",
-    kind = "checkbox",
-    label = "General channels",
-    tooltip = "Rewrite numbered general channels 1 to 4",
-  },
-  {
-    key = "party",
-    kind = "checkbox",
-    label = "Party",
-    tooltip = "Rewrite party chat",
-  },
-  {
-    key = "guild",
-    kind = "checkbox",
-    label = "Guild",
-    tooltip = "Rewrite guild chat",
-  },
-  {
-    key = "raid",
-    kind = "checkbox",
-    label = "Raid",
-    tooltip = "Rewrite raid chat",
-  },
 }
 
 -- Validity predicate. The whole job is one wrapper around the
@@ -129,9 +94,9 @@ end
 
 -- Whether one outgoing message changes. The module toggle, a known
 -- dialect, and a nonzero chance gate everything; emotes never change
--- (the 2007 rule); numbered channels need the channel toggle and a
--- 1-4 target; any other type has no toggle and passes through
--- untouched. A (( prefix marks out-of-character and stays as typed.
+-- (the 2007 rule). Only /say and /yell reach the engine; every
+-- other type passes through untouched.
+-- A (( prefix marks out-of-character and stays as typed.
 function chat.MangleForSend(message, chatType, target)
   if message == nil then
     message = ""
@@ -156,15 +121,10 @@ function chat.MangleForSend(message, chatType, target)
   if kind == "EMOTE" then
     return message
   end
-  if kind == "CHANNEL" then
-    local n = tonumber(target)
-    if n == nil or n < 1 or n > 4 then
-      return message
-    end
-    if not o.channel then
-      return message
-    end
-  elseif o[string.lower(kind)] ~= true then
+  if kind ~= "SAY" and kind ~= "YELL" then
+    return message
+  end
+  if o[string.lower(kind)] ~= true then
     return message
   end
   if message:find("^%(%(") then
@@ -253,7 +213,7 @@ end
 function chat.ChannelStates()
   local o = chat.opts()
   local parts = {}
-  for _, key in ipairs({ "say", "yell", "whisper", "channel", "party", "guild", "raid" }) do
+  for _, key in ipairs({ "say", "yell" }) do
     parts[#parts + 1] = channelName(key) .. " " .. (o[key] and "on" or "off")
   end
   return "channels " .. table.concat(parts, ", ")
@@ -265,9 +225,6 @@ function chat.ToggleChannel(key)
   if key == nil or key == "" or key == "list" then
     ns.say("chat " .. chat.ChannelStates())
     return
-  end
-  if key == "general" then
-    key = "channel"
   end
   local o = chat.opts()
   if o[key] == nil then
@@ -330,7 +287,7 @@ end
 local descriptor = {
   name = "chat",
   title = "Chat",
-  job = "Rewrites outgoing chat in a dwarven or troll dialect before it sends",
+  job = "Rewrites outgoing /say and /yell in a dwarven or troll dialect before it sends",
   default = true,
   IsAvailable = chat.IsAvailable,
   init = function()

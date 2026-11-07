@@ -4142,10 +4142,7 @@ do
       keys[#keys + 1] = row.key
     end
   end
-  check(
-    "chat options present in panel order",
-    table.concat(keys, ",") == "enabled,dialect,chance,say,yell,whisper,channel,party,guild,raid"
-  )
+  check("chat options present in panel order", table.concat(keys, ",") == "enabled,dialect,chance,say,yell")
   check(
     "chat help lines keep config second to last",
     ns.HELP[#ns.HELP - 1]:find("config", 1, true) ~= nil and ns.HELP[2]:find("/vui chat", 1, true) ~= nil
@@ -4214,15 +4211,18 @@ do
   check("emote never changes", chat.MangleForSend("hello", "EMOTE") == "hello")
   check("unknown types pass through", chat.MangleForSend("hello", "RAID_WARNING") == "hello")
   check(
-    "numbered channels gate on 1-4",
-    chat.MangleForSend("hello", "CHANNEL", 2) == "G'day"
-      and chat.MangleForSend("hello", "CHANNEL", 5) == "hello"
-      and chat.MangleForSend("hello", "CHANNEL", nil) == "hello"
+    "only say and yell mangle",
+    chat.MangleForSend("hello", "YELL") == "G'day"
+      and chat.MangleForSend("hello", "WHISPER") == "hello"
+      and chat.MangleForSend("hello", "GUILD") == "hello"
+      and chat.MangleForSend("hello", "PARTY") == "hello"
+      and chat.MangleForSend("hello", "RAID") == "hello"
+      and chat.MangleForSend("hello", "CHANNEL", 2) == "hello"
   )
   local o = chat.opts()
-  o.whisper = false
-  check("a flipped channel passes through", chat.MangleForSend("hello", "WHISPER") == "hello")
-  o.whisper = true
+  o.yell = false
+  check("a flipped channel passes through", chat.MangleForSend("hello", "YELL") == "hello")
+  o.yell = true
   o.chance = 0
   check("chance 0 stays silent", chat.MangleForSend("hello", "SAY") == "hello")
   o.chance = 8
@@ -4315,8 +4315,14 @@ do
     "slash flips a channel with sound",
     chat.opts().say == false and played[#played] == "off" and said[#said] == "chat say channel off"
   )
-  _G.SlashCmdList.VOCUI("chat toggle general")
-  check("general names the channel key", chat.opts().channel == false)
+  saidBefore = #said
+  printed = capturePrint(function()
+    _G.SlashCmdList.VOCUI("chat toggle general")
+  end)
+  check(
+    "general is no longer a channel",
+    chat.opts().channel == nil and chat.opts().say == false and #printed == #ns.HELP and #said == saidBefore + 1
+  )
   _G.SlashCmdList.VOCUI("chat toggle list")
   check("toggle list names every channel", said[#said]:find("channels say off", 1, true) ~= nil)
   before = chat.opts().say
@@ -4424,14 +4430,11 @@ do
   for _, s in ipairs(registered) do
     keys[#keys + 1] = s.key
   end
-  check(
-    "panel registers the rows in order",
-    table.concat(keys, ",") == "enabled,dialect,chance,say,yell,whisper,channel,party,guild,raid"
-  )
+  check("panel registers the rows in order", table.concat(keys, ",") == "enabled,dialect,chance,say,yell")
   check(
     "panel leads with the job and the escape hatch",
     headers[1] == chat.descriptor.job
-      and headers[2] == "Lines starting with (( stay untouched, emotes never change"
+      and headers[2] == "Only /say and /yell change; (( lines and emotes never do"
       and headers[3] == "Dialect"
       and headers[4] == "Channels"
   )
