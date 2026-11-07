@@ -2905,11 +2905,12 @@ do
 end
 
 -- Bars module: action bars and the cooldown manager. Buff bars grow
--- from the center instead of the native left-to-right fill.
+-- from the center, icon strips center on their anchor, instead of the native corner-anchored layouts.
 local BARS = {
   "modules/bars/Bars.lua",
   "modules/bars/Consumables.lua",
   "modules/bars/Grow.lua",
+  "modules/bars/Icons.lua",
   "modules/bars/Panel.lua",
 }
 local function loadBars()
@@ -2929,6 +2930,15 @@ local function barsWorld()
   end
   _G.CooldownViewerBuffBarItemMixin = {
     RefreshCooldownInfo = function() end,
+  }
+  _G.EssentialCooldownViewerMixin = {
+    RefreshLayout = function() end,
+  }
+  _G.UtilityCooldownViewerMixin = {
+    RefreshLayout = function() end,
+  }
+  _G.BuffIconCooldownViewerMixin = {
+    RefreshLayout = function() end,
   }
   return w
 end
@@ -3081,8 +3091,18 @@ do
     "bars help lines keep config second to last",
     ns.HELP[#ns.HELP - 1]:find("config", 1, true) ~= nil and ns.HELP[3]:find("/vui bars", 1, true) ~= nil
   )
-  check("bars hooks the buff-bar update on init", #w.hooks == 1 and w.hooks[1].name == "RefreshCooldownInfo")
-  _G.hooksecurefunc, _G.CooldownViewerBuffBarItemMixin = nil, nil
+  local layouts = 0
+  for _, h in ipairs(w.hooks) do
+    if h.name == "RefreshLayout" then
+      layouts = layouts + 1
+    end
+  end
+  check(
+    "bars hooks the bar and icon updates on init",
+    #w.hooks == 4 and w.hooks[1].name == "RefreshCooldownInfo" and layouts == 3
+  )
+  _G.hooksecurefunc, _G.CooldownViewerBuffBarItemMixin, _G.EssentialCooldownViewerMixin, _G.UtilityCooldownViewerMixin, _G.BuffIconCooldownViewerMixin =
+    nil, nil, nil, nil, nil
 end
 
 -- Bars fill: center, left, right, and vertical
@@ -3130,7 +3150,8 @@ do
   ns.db.modules.bars.enabled = false
   bars.ApplyFill(item)
   check("a disabled module restores the fill", bars.OnBarCooldown(item) == false and tex.filled == true)
-  _G.hooksecurefunc, _G.CooldownViewerBuffBarItemMixin = nil, nil
+  _G.hooksecurefunc, _G.CooldownViewerBuffBarItemMixin, _G.EssentialCooldownViewerMixin, _G.UtilityCooldownViewerMixin, _G.BuffIconCooldownViewerMixin =
+    nil, nil, nil, nil, nil
 end
 
 -- Bars hook: installs once, on viewer load
@@ -3141,20 +3162,142 @@ do
   local bars = ns.bars
   ns.modules.InitAll()
   check(
-    "the viewer load hooks the buff-bar update",
-    #w.hooks == 1 and w.hooks[1].name == "RefreshCooldownInfo" and bars.hooked == true
+    "the viewer load hooks the bar and icon updates",
+    #w.hooks == 4 and w.hooks[1].name == "RefreshCooldownInfo" and bars.hooked == true
   )
-  check("the hook installs once", bars.InstallHook() == true and #w.hooks == 1)
+  check("the hook installs once", bars.InstallHook() == true and #w.hooks == 4)
   local fresh = loadBars()
   fresh.db = {}
   fresh.modules.InitAll()
-  check("a viewer already loaded still hooks", #w.hooks == 2)
-  _G.CooldownViewerBuffBarItemMixin = nil
+  check("a viewer already loaded still hooks", #w.hooks == 8)
+  _G.CooldownViewerBuffBarItemMixin, _G.EssentialCooldownViewerMixin, _G.UtilityCooldownViewerMixin, _G.BuffIconCooldownViewerMixin =
+    nil, nil, nil, nil
   local later = loadBars()
   later.db = {}
   check("no viewer means no hook yet", later.bars.InstallHook() == false and later.bars.hooked ~= true)
-  _G.hooksecurefunc, _G.CooldownViewerBuffBarItemMixin = nil, nil
+  _G.hooksecurefunc, _G.CooldownViewerBuffBarItemMixin, _G.EssentialCooldownViewerMixin, _G.UtilityCooldownViewerMixin, _G.BuffIconCooldownViewerMixin =
+    nil, nil, nil, nil, nil
   check("no hook API means unavailable", bars.IsAvailable() == false)
+end
+
+-- Bars icons: the icon strips center on their anchor while bars keep
+-- their fill; anything unknown stays native and never errors.
+local function stubViewer(o)
+  o = o or {}
+  local relTo = {}
+  local v = {
+    current = {},
+    sets = 0,
+    w = o.w or 300,
+    h = o.h or 40,
+    noSize = o.noSize or false,
+    failSet = o.failSet or false,
+  }
+  v.isHorizontal = o.horiz
+  if v.isHorizontal == nil then
+    v.isHorizontal = true
+  end
+  v.layoutFramesGoingRight = o.goingRight
+  if v.layoutFramesGoingRight == nil then
+    v.layoutFramesGoingRight = true
+  end
+  v.layoutFramesGoingUp = o.goingUp or false
+  local base = o.base or { { "TOPLEFT", relTo, "TOPLEFT", 100, 50 } }
+  local function copy(points)
+    local fresh = {}
+    for i, p in ipairs(points) do
+      fresh[i] = { p[1], p[2], p[3], p[4], p[5] }
+    end
+    return fresh
+  end
+  v.current = copy(base)
+  function v:GetNumPoints()
+    return #self.current
+  end
+  function v:GetPoint(i)
+    local p = self.current[i]
+    if not p then
+      return nil
+    end
+    return p[1], p[2], p[3], p[4], p[5]
+  end
+  function v:ClearAllPoints()
+    self.current = {}
+  end
+  function v:SetPoint(point, relativeTo, relativePoint, x, y)
+    if self.failSet then
+      error("no anchors here")
+    end
+    self.sets = self.sets + 1
+    self.current[#self.current + 1] = { point, relativeTo, relativePoint, x, y }
+  end
+  function v:GetWidth()
+    if self.noSize then
+      return nil
+    end
+    return self.w
+  end
+  function v:GetHeight()
+    if self.noSize then
+      return nil
+    end
+    return self.h
+  end
+  return v
+end
+do
+  barsWorld()
+  local ns = loadBars()
+  ns.db = {}
+  local bars = ns.bars
+  bars.opts() -- fill defaults so the growth and enabled reads have a table
+  local v = stubViewer()
+  check(
+    "center shifts a right-growing strip left by half",
+    bars.OnViewerLayout(v) == true
+      and #v.current == 1
+      and v.current[1][1] == "TOPLEFT"
+      and v.current[1][3] == "TOPLEFT"
+      and v.current[1][4] == -50
+      and v.current[1][5] == 70
+  )
+  local sets = v.sets
+  check("a second layout changes nothing", bars.OnViewerLayout(v) == true and v.sets == sets)
+  local L = stubViewer({ goingRight = false })
+  check("left-growing strips shift right by half", bars.OnViewerLayout(L) == true and L.current[1][4] == 250)
+  local V = stubViewer({ horiz = false, goingUp = true, h = 100 })
+  check(
+    "vertical strips center on both axes",
+    bars.OnViewerLayout(V) == true and V.current[1][4] == -50 and V.current[1][5] == 0
+  )
+  ns.db.modules.bars.growth = "left"
+  check("growth left stays native", bars.OnViewerLayout(v) == true and v.current[1][4] == 100)
+  ns.db.modules.bars.growth = "center"
+  ns.db.modules.bars.enabled = false
+  check("a disabled module restores native", bars.OnViewerLayout(L) == true and L.current[1][4] == 100)
+  ns.db.modules.bars.enabled = true
+  -- v retires here; the drag case below uses a fresh viewer
+  -- (its anchors already proved the point above)
+  local moved = stubViewer()
+  moved:ClearAllPoints()
+  local relTo = {}
+  moved:SetPoint("TOPLEFT", relTo, "TOPLEFT", 200, 50)
+  local movedSets = moved.sets
+  check(
+    "a dragged anchor re-bases without drift",
+    bars.OnViewerLayout(moved) == true
+      and moved.current[1][4] == 50
+      and moved.current[1][2] == relTo
+      and moved.sets == movedSets + 1
+  )
+  local vague = stubViewer({ noSize = true })
+  check("unknown shape stays quiet", bars.OnViewerLayout(vague) == false and #vague.current == 1)
+  local hostile = stubViewer({ failSet = true })
+  local ok, centered = pcall(bars.OnViewerLayout, hostile)
+  check("a refused SetPoint never errors", ok == true and centered == false)
+  _G.hooksecurefunc = nil
+  _G.CooldownViewerBuffBarItemMixin, _G.EssentialCooldownViewerMixin, _G.UtilityCooldownViewerMixin, _G.BuffIconCooldownViewerMixin =
+    nil, nil, nil, nil
 end
 
 -- Consumables service: category matchers behind the macro words.

@@ -25,6 +25,7 @@ read_globals = {
   "C_PvP", "C_QuestLog", "C_Reputation", "C_UnitAuras",
   "C_SpecializationInfo", "C_Timer",
   "CooldownViewerBuffBarItemMixin",
+  "EssentialCooldownViewerMixin", "UtilityCooldownViewerMixin", "BuffIconCooldownViewerMixin",
   "CreateFrame",
   "CreateMacro", "EditMacro", "GetMacroInfo", "GetNumMacros",
   "CreateSettingsButtonInitializer",

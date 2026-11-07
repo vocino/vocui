@@ -4,8 +4,9 @@ ns.bars = bars
 
 -- Bars: action-bar and cooldown-manager customization, under the
 -- module contract. First job: the cooldown viewer's buff bars grow
--- from the center instead of the native left-to-right fill, through
--- one secure hook and no new frames.
+-- from the center and its icon strips center on their anchor,
+-- instead of the native corner-anchored layouts, through secure hooks
+-- and no new frames.
 
 bars.SECTION = "modules.bars"
 
@@ -44,8 +45,8 @@ bars.OPTIONS = {
   {
     key = "growth",
     kind = "dropdown",
-    label = "Bar growth",
-    tooltip = "Horizontal bars grow from the center, left, or right; vertical bars center or stay native",
+    label = "Growth",
+    tooltip = "Center grows bars and icon strips from the middle; left and right only change bars",
     choices = {
       { value = "center", label = "Center" },
       { value = "left", label = "Left" },
@@ -138,6 +139,9 @@ function bars.InstallHook()
   end
   hooksecurefunc(mixin, "RefreshCooldownInfo", bars.OnBarCooldown)
   bars.hooked = true
+  if bars.InstallIconHooks then
+    bars.InstallIconHooks()
+  end
   return true
 end
 
@@ -208,7 +212,7 @@ end
 local descriptor = {
   name = "bars",
   title = "Bars",
-  job = "Grows cooldown buff bars from the center and keeps food, drink and potion macros pointed at the best in bags",
+  job = "Centers the cooldown viewer's bars and icon strips and keeps food, drink and potion macros pointed at the best in bags",
   default = true,
   IsAvailable = bars.IsAvailable,
   init = function()

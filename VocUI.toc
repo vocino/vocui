@@ -33,6 +33,7 @@ modules/chat/Panel.lua
 modules/bars/Bars.lua
 modules/bars/Consumables.lua
 modules/bars/Grow.lua
+modules/bars/Icons.lua
 modules/bars/Panel.lua
 modules/gear/Gear.lua
 modules/gear/Evaluate.lua
