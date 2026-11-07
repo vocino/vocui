@@ -31,5 +31,5 @@ function map.RowChanged(key)
 end
 
 function map.BuildPanelImpl(page)
-  ns.settings.BuildModulePage(map, page, "Left-click opens these settings, right-click refreshes the macros")
+  ns.settings.BuildModulePage(map, page, "Left-click opens the quick actions, right-click opens these settings")
 end

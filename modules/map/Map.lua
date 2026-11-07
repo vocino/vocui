@@ -12,11 +12,12 @@ ns.map = map
 
 map.SECTION = "modules.map"
 
--- The button's look, in one place: a square on the minimap ring, the
+-- The button's look, in one place: a 31-pixel square on the minimap ring, the
 -- toc's stock gear tinted the palette's blue, gold while hovered.
-map.SIZE = 33
+map.SIZE = 31
 map.RADIUS = 100
 map.BORDER = "Interface\\Minimap\\MiniMap-TrackingBorder" -- Blizzard's own minimap-button ring (ArtifactUI, HelpPlate, and ItemDisplay read the same file)
+map.BACKGROUND = "Interface\\Minimap\\UI-Minimap-Background" -- the dark disk behind the icon (LibDBIcon-1.0, as shipped in BugSack)
 map.ICON = "Interface\\Icons\\INV_Misc_Gear_01" -- the toc's stock gear, tinted blue
 
 -- Defaults are the product: the button shows from landing, bottom-left
@@ -126,17 +127,172 @@ function map.RunBarsAction(cmd)
   end
 end
 
--- Left-click opens the package settings; right-click runs the macro
--- refresh through the core slash line, so the press stays a core
--- service call whatever the bars module does with it.
-function map.OnClick(mouse)
-  if mouse == "RightButton" then
+-- The pop-out's rows: the regular actions under one roof. Settings
+-- is a row like the rest so the window is the whole shortcut surface.
+map.ACTION_DEFS = {
+  { key = "refresh", label = "Refresh macros" },
+  { key = "survey", label = "Survey bags" },
+  { key = "settings", label = "VocUI settings" },
+}
+
+-- What a pop-out row does: its sound, its work through the core, then
+-- the window goes away silently, like a menu that served its press.
+local function pressAction(key)
+  if key == "refresh" then
     ns.play("on")
     map.RunBarsAction("refresh")
+  elseif key == "survey" then
+    ns.play("open")
+    map.RunBarsAction("survey")
+  elseif key == "settings" then
+    ns.play("open")
+    ns.settings.Open()
+  end
+  map.HideWindow()
+end
+
+-- Build the pop-out once: a Blizzard dialog panel under the button
+-- with one native button per action. The backdrop numbers are
+-- Blizzard's own BACKDROP_DIALOG_32_32
+-- (Interface/AddOns/Blizzard_SharedXML/Backdrop.lua); the buttons ride
+-- UIPanelButtonTemplate. A missing piece skips its step; the window is
+-- complete without it.
+function map.BuildWindow()
+  if type(CreateFrame) ~= "function" then
+    return nil
+  end
+  local parent
+  if type(UIParent) == "table" then
+    parent = UIParent
+  else
+    parent = map.button
+  end
+  local window = CreateFrame("Frame", "VocUIMinimapWindow", parent, "BackdropTemplate")
+  if window == nil then
+    return nil
+  end
+  if type(window.SetSize) == "function" then
+    window:SetSize(190, 132)
+  end
+  if type(window.SetClampedToScreen) == "function" then
+    window:SetClampedToScreen(true)
+  end
+  if type(window.SetBackdrop) == "function" then
+    window:SetBackdrop({
+      bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+      edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+      tile = true,
+      tileSize = 32,
+      edgeSize = 32,
+      insets = { left = 11, right = 12, top = 12, bottom = 11 },
+    })
+  end
+  if type(window.CreateFontString) == "function" then
+    local title = window:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    if title ~= nil then
+      if type(title.SetText) == "function" then
+        title:SetText("VocUI")
+      end
+      if type(title.SetTextColor) == "function" and type(ns.COLORS) == "table" and type(ns.rgb) == "function" then
+        title:SetTextColor(ns.rgb(ns.COLORS.gold))
+      end
+      if type(title.SetPoint) == "function" then
+        title:SetPoint("TOP", window, "TOP", 0, -14)
+      end
+    end
+  end
+  map.actions = {}
+  local anchorRow = nil
+  for _, def in ipairs(map.ACTION_DEFS) do
+    local row = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+    if row ~= nil then
+      if type(row.SetSize) == "function" then
+        row:SetSize(160, 22)
+      end
+      if type(row.SetText) == "function" then
+        row:SetText(def.label)
+      end
+      if type(row.SetPoint) == "function" then
+        if anchorRow == nil then
+          row:SetPoint("TOP", window, "TOP", 0, -36)
+        else
+          row:SetPoint("TOP", anchorRow, "BOTTOM", 0, -6)
+        end
+      end
+      if type(row.SetScript) == "function" then
+        local key = def.key
+        row:SetScript("OnClick", function()
+          pressAction(key)
+        end)
+      end
+      anchorRow = row
+    end
+    map.actions[#map.actions + 1] = {
+      key = def.key,
+      label = def.label,
+      press = function()
+        pressAction(def.key)
+      end,
+    }
+  end
+  if type(window.SetShown) == "function" then
+    window:SetShown(false)
+  end
+  map.window = window
+  return window
+end
+
+-- Put the window away silently. Action presses and right-clicks call
+-- this; the toggle below is the only path that sounds the close.
+function map.HideWindow()
+  if map.window ~= nil and type(map.window.SetShown) == "function" then
+    map.window:SetShown(false)
+  end
+end
+
+-- Show the window under the button, re-anchored every time so it
+-- follows the button around the ring.
+function map.ShowWindow()
+  if map.window == nil then
+    map.BuildWindow()
+  end
+  local window = map.window
+  if window == nil then
     return
   end
+  if map.button ~= nil and type(window.ClearAllPoints) == "function" and type(window.SetPoint) == "function" then
+    window:ClearAllPoints()
+    window:SetPoint("TOP", map.button, "BOTTOM", 0, -6)
+  end
+  if type(window.SetShown) == "function" then
+    window:SetShown(true)
+  end
   ns.play("open")
-  ns.settings.Open()
+end
+
+-- Show the window, or put it away with the close sound when it is
+-- already out.
+function map.ToggleWindow()
+  local window = map.window
+  if window ~= nil and type(window.IsShown) == "function" and window:IsShown() then
+    map.HideWindow()
+    ns.play("close")
+    return
+  end
+  map.ShowWindow()
+end
+
+-- Left-click pops the actions out of the icon; right-click opens the
+-- package settings. The window hides first on the right-click path, so
+-- the screen never holds a stale panel.
+function map.OnClick(mouse)
+  if mouse == "RightButton" then
+    map.HideWindow()
+    ns.play("open")
+    ns.settings.Open()
+    return
+  end
+  map.ToggleWindow()
 end
 
 -- Hover follows the tooltip contract: gold title, one white line naming
@@ -150,7 +306,7 @@ function map.OnEnter(button)
   GameTooltip:SetOwner(button, "ANCHOR_LEFT")
   GameTooltip:SetText("VocUI", c.gold[1], c.gold[2], c.gold[3])
   GameTooltip:AddLine("Blue button for the regular actions", c.text[1], c.text[2], c.text[3], true)
-  GameTooltip:AddLine("Left-click settings, right-click refreshes macros", c.muted[1], c.muted[2], c.muted[3], true)
+  GameTooltip:AddLine("Left-click actions, right-click settings", c.muted[1], c.muted[2], c.muted[3], true)
   GameTooltip:Show()
 end
 
@@ -161,8 +317,12 @@ function map.OnLeave()
   end
 end
 
--- Build the button once: ring, blue gear, click and hover scripts. A
--- missing piece skips its step; the button is complete without it.
+-- Build the button once: ring, disk, blue gear, click and hover
+-- scripts. Layers follow LibDBIcon-1.0's recipe (as shipped in BugSack
+-- on the Forever client): the ring rides OVERLAY outside the button,
+-- an opaque disk sits behind the icon, and the icon centers on
+-- ARTWORK. A missing piece skips its step; the button is complete
+-- without it.
 function map.BuildButton()
   if type(CreateFrame) ~= "function" then
     return nil
@@ -178,17 +338,44 @@ function map.BuildButton()
   if type(button.EnableMouse) == "function" then
     button:EnableMouse(true)
   end
+  if type(button.SetFrameStrata) == "function" then
+    button:SetFrameStrata("MEDIUM")
+  end
+  if type(button.SetFrameLevel) == "function" then
+    button:SetFrameLevel(8)
+  end
   if type(button.RegisterForClicks) == "function" then
     button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   end
   if type(button.CreateTexture) == "function" then
-    local border = button:CreateTexture(nil, "BACKGROUND")
+    local border = button:CreateTexture(nil, "OVERLAY")
     if border ~= nil then
       if type(border.SetTexture) == "function" then
         border:SetTexture(map.BORDER)
       end
-      if type(border.SetAllPoints) == "function" then
-        border:SetAllPoints(button)
+      if type(border.ClearAllPoints) == "function" then
+        border:ClearAllPoints()
+      end
+      if type(border.SetPoint) == "function" then
+        border:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
+      end
+      if type(border.SetSize) == "function" then
+        border:SetSize(50, 50)
+      end
+    end
+    local background = button:CreateTexture(nil, "BACKGROUND")
+    if background ~= nil then
+      if type(background.SetTexture) == "function" then
+        background:SetTexture(map.BACKGROUND)
+      end
+      if type(background.ClearAllPoints) == "function" then
+        background:ClearAllPoints()
+      end
+      if type(background.SetPoint) == "function" then
+        background:SetPoint("CENTER", button, "CENTER", 0, 0)
+      end
+      if type(background.SetSize) == "function" then
+        background:SetSize(24, 24)
       end
     end
     local icon = button:CreateTexture(nil, "ARTWORK")
@@ -196,17 +383,20 @@ function map.BuildButton()
       if type(icon.SetTexture) == "function" then
         icon:SetTexture(map.ICON)
       end
-      if type(icon.SetSize) == "function" then
-        icon:SetSize(21, 21)
+      if type(icon.ClearAllPoints) == "function" then
+        icon:ClearAllPoints()
       end
       if type(icon.SetPoint) == "function" then
         icon:SetPoint("CENTER", button, "CENTER", 0, 0)
+      end
+      if type(icon.SetSize) == "function" then
+        icon:SetSize(18, 18)
       end
       if type(icon.SetTexCoord) == "function" then
         icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
       end
     end
-    map.icon = icon
+    map.border, map.background, map.icon = border, background, icon
     paint(icon, false)
   end
   if type(button.SetScript) == "function" then
@@ -278,10 +468,13 @@ function map.ApplyEnabledImpl()
   end
   if map.opts().enabled then
     map.ApplyPositionImpl()
+  else
+    map.HideWindow()
   end
 end
 
 function map.InitImpl()
+  map.BuildWindow()
   map.ApplyEnabledImpl()
 end
 
