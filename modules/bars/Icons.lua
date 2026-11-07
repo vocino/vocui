@@ -116,9 +116,7 @@ function bars.OnViewerLayout(viewer)
   if not cur then
     return false
   end
-  if applied and sameAnchors(cur, applied) then
-    -- untouched since our last pass: same base, new content size
-  else
+  if not applied or not sameAnchors(cur, applied) then
     base = cur
   end
   local dx, dy = 0, 0
