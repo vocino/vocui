@@ -20,7 +20,6 @@ xp.SECTION = "modules.xp"
 xp.defaults = {
   enabled = true,
   announce = true,
-  guildDing = false,
   hideDefault = true,
   repMode = true,
   followLatest = false,
@@ -78,12 +77,7 @@ xp.OPTIONS = {
     label = "Chat announcements",
     tooltip = "Say burst gains, rival bars, and first-seen notes in chat",
   },
-  {
-    key = "guildDing",
-    kind = "checkbox",
-    label = "Announce level-ups in guild chat",
-    tooltip = "Post Ding and your new level to guild chat on level-up",
-  },
+
   {
     key = "hideDefault",
     kind = "checkbox",

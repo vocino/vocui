@@ -2189,7 +2189,7 @@ do
   end
   check(
     "panel registers the rows in order",
-    table.concat(keys, ",") == "enabled,announce,guildDing,hideDefault,repMode,followLatest,locked"
+    table.concat(keys, ",") == "enabled,announce,hideDefault,repMode,followLatest,locked"
   )
   check(
     "panel leads with the job and the window",
@@ -2235,8 +2235,8 @@ do
   )
   xp.SetEnabled(true)
   check(
-    "toggle on restores the bar and the ding",
-    xp.frame.events.PLAYER_XP_UPDATE ~= nil and xp.frame.events.PLAYER_LEVEL_UP ~= nil
+    "toggle on restores the bar without level-ups",
+    xp.frame.events.PLAYER_XP_UPDATE ~= nil and xp.frame.events.PLAYER_LEVEL_UP == nil
   )
 end
 
@@ -2283,20 +2283,8 @@ do
   xp.frame.scripts.OnEvent(xp.frame, "PLAYER_ENTERING_WORLD")
   check("cap pivots to the watched faction", xp.repTracked() == 7)
   check("rep mode watches the event set", xp.frame.events.UPDATE_FACTION ~= nil)
-  check("rep mode keeps the ding", xp.frame.events.PLAYER_LEVEL_UP ~= nil)
-  do
-    local sent = {}
-    _G.SendChatMessage = function(msg, chatType)
-      sent[#sent + 1] = { msg, chatType }
-    end
-    _G.IsInGuild = function()
-      return true
-    end
-    xp.opts().guildDing = true
-    xp.frame.scripts.OnEvent(xp.frame, "PLAYER_LEVEL_UP", 10)
-    check("the cap ding still posts", sent[1][1] == "Ding 10" and sent[1][2] == "GUILD")
-    _G.SendChatMessage, _G.IsInGuild = nil, nil
-  end
+  check("rep mode never listens for level-ups", xp.frame.events.PLAYER_LEVEL_UP == nil)
+  check("the guild send helpers are gone", xp.maybeGuildDing == nil and xp.flushGuildDing == nil)
   _G.GetMaxPlayerLevel, _G.C_Reputation = nil, nil
 end
 
@@ -2367,147 +2355,10 @@ do
   local warned = xp.checkRivals()
   check("a loaded rival warns once", warned == true and said[1]:find("Dominos", 1, true) ~= nil)
   check("the warning never repeats", xp.checkRivals() == false and #said == 1)
-  -- XP guild ding: opt-in level-up post to guild chat
-  do
-    xpWorld()
-    local dingNs = loadXP()
-    dingNs.db = {}
-    local dingXp = dingNs.xp
-    local sent = {}
-    _G.SendChatMessage = function(msg, chatType)
-      sent[#sent + 1] = { msg, chatType }
-    end
-    _G.IsInGuild = function()
-      return true
-    end
-    check("guild ding stays off by default", dingXp.maybeGuildDing(60) == false and #sent == 0)
-    dingXp.opts().guildDing = true
-    check(
-      "guild ding posts the new level",
-      dingXp.maybeGuildDing(60) == true and sent[1][1] == "Ding 60" and sent[1][2] == "GUILD"
-    )
-    _G.IsInGuild = function()
-      return false
-    end
-    check("guild ding stays silent guildless", dingXp.maybeGuildDing(61) == false and #sent == 1)
-    _G.SendChatMessage = nil
-    _G.IsInGuild = function()
-      return true
-    end
-    check("guild ding never errors without the chat api", dingXp.maybeGuildDing(61) == false and #sent == 1)
-    _G.SendChatMessage = function(msg, chatType)
-      sent[#sent + 1] = { msg, chatType }
-    end
-    check(
-      "guild ding reads the level when the event carries none",
-      dingXp.maybeGuildDing(nil) == true and sent[2][1] == "Ding 10" and sent[2][2] == "GUILD"
-    )
-    _G.SendChatMessage, _G.IsInGuild = nil, nil
-  end
-  -- Guild ding defers through combat: a mid-fight level-up stashes its
-  -- level instead of calling the chat API, and the flush after combat
-  -- posts it exactly once.
-  do
-    xpWorld()
-    local combatNs = loadXP()
-    combatNs.db = {}
-    local combatXp = combatNs.xp
-    local combatSent = {}
-    _G.SendChatMessage = function(msg, chatType)
-      combatSent[#combatSent + 1] = { msg, chatType }
-    end
-    _G.IsInGuild = function()
-      return true
-    end
-    _G.InCombatLockdown = function()
-      return true
-    end
-    combatXp.opts().guildDing = true
-    check("guild ding holds fire in combat", combatXp.maybeGuildDing(60) == false and #combatSent == 0)
-    _G.InCombatLockdown = function()
-      return false
-    end
-    check(
-      "guild ding posts after combat",
-      combatXp.flushGuildDing() == true
-        and #combatSent == 1
-        and combatSent[1][1] == "Ding 60"
-        and combatSent[1][2] == "GUILD"
-    )
-    check("a flushed ding never reposts", combatXp.flushGuildDing() == false and #combatSent == 1)
-    _G.SendChatMessage, _G.IsInGuild = nil, nil
-    _G.InCombatLockdown = function()
-      return false
-    end
-  end
-  -- Guild ding asks the messaging lockdown first: a refused line
-  -- stashes like a combat ding, the flush holds fire while locked,
-  -- and the send goes through the namespace, never the global.
-  do
-    xpWorld()
-    _G.UnitAffectingCombat = function()
-      return false
-    end
-    local lockNs = loadXP()
-    lockNs.db = {}
-    local lockXp = lockNs.xp
-    local lockSent, globalSent = {}, {}
-    _G.C_ChatInfo = {
-      SendChatMessage = function(msg, chatType)
-        lockSent[#lockSent + 1] = { msg, chatType }
-      end,
-      InChatMessagingLockdown = function()
-        return true
-      end,
-    }
-    _G.SendChatMessage = function(msg, chatType)
-      globalSent[#globalSent + 1] = { msg, chatType }
-    end
-    _G.IsInGuild = function()
-      return true
-    end
-    lockXp.opts().guildDing = true
-    check(
-      "guild ding holds fire under the messaging lockdown",
-      lockXp.maybeGuildDing(60) == false and #lockSent == 0 and #globalSent == 0
-    )
-    check("the flush holds fire while locked", lockXp.flushGuildDing() == false and #lockSent == 0)
-    _G.C_ChatInfo.InChatMessagingLockdown = function()
-      return false
-    end
-    check(
-      "guild ding posts through the namespace after the lockdown",
-      lockXp.flushGuildDing() == true
-        and #lockSent == 1
-        and lockSent[1][1] == "Ding 60"
-        and lockSent[1][2] == "GUILD"
-        and #globalSent == 0
-    )
-    _G.C_ChatInfo, _G.SendChatMessage, _G.IsInGuild, _G.UnitAffectingCombat = nil, nil, nil, nil
-  end
-  -- A missing lockdown query is not a refusal: the gate only holds
-  -- when the client says so.
-  do
-    xpWorld()
-    local openNs = loadXP()
-    openNs.db = {}
-    local openXp = openNs.xp
-    local openSent = {}
-    _G.C_ChatInfo = {
-      SendChatMessage = function(msg, chatType)
-        openSent[#openSent + 1] = { msg, chatType }
-      end,
-    }
-    _G.IsInGuild = function()
-      return true
-    end
-    openXp.opts().guildDing = true
-    check(
-      "guild ding sends without the lockdown query",
-      openXp.maybeGuildDing(61) == true and #openSent == 1 and openSent[1][1] == "Ding 61"
-    )
-    _G.C_ChatInfo, _G.IsInGuild = nil, nil
-  end
+  -- Level-up guild posts were removed outright: the SendChatMessage call
+  -- tripped the blocked-action guard, which no pcall can catch, so the xp
+  -- module holds no send helper and registers no level-up event.
+  check("no guild send survives the removal", xp.maybeGuildDing == nil and xp.flushGuildDing == nil)
   _G.C_AddOns = nil
 end
 

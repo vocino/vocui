@@ -18,7 +18,6 @@ local nativeHiddenByUs = false
 local rivalsWarned = false
 local repCache = {}
 local repFactionID, repWatching, lastGainedID, repBaseline = nil, false, nil, nil
-local pendingGuildDing = nil -- a combat-deferred ding level; the latest wins
 local summaryAcc = nil -- built by resetTrackers during init; guard below covers early reads
 
 local xpEvents = {
@@ -426,89 +425,9 @@ local function onRep(gainedID, updatedStanding, renownLevel)
   xp.refresh()
 end
 
--- The client refuses chat from addon code while its messaging lockdown
--- holds, and answers with ADDON_ACTION_BLOCKED, which no pcall can
--- catch: a refused call still logs the block against the addon. Ask
--- first and stay quiet instead. A missing query is not a refusal: the
--- gate only holds when the client says so.
-local function chatLocked()
-  if type(C_ChatInfo) ~= "table" then
-    return false
-  end
-  local gated = C_ChatInfo.InChatMessagingLockdown
-  if type(gated) ~= "function" then
-    return false
-  end
-  local ok, held = pcall(gated)
-  return ok and held == true
-end
-
--- One send through the documented namespace first. The bare global is
--- Blizzard's deprecated shim over the same function, so it only runs
--- when the namespace is missing, never as a retry: a refused line would
--- book a second blocked action for the same send.
-local function sendGuild(text)
-  if type(C_ChatInfo) == "table" and type(C_ChatInfo.SendChatMessage) == "function" then
-    return pcall(C_ChatInfo.SendChatMessage, text, "GUILD")
-  end
-  if type(SendChatMessage) == "function" then
-    return pcall(SendChatMessage, text, "GUILD")
-  end
-  return false
-end
-
--- Level-up posts to guild chat, opt-in and off by default: guild chat
--- is shared space, so nothing posts unless the player asks. Guildless,
--- or no chat API, means silence, never an error. Returns true when a
--- line went out, so tests can pin the behavior. A level-up can land
--- somewhere the client refuses chat, in combat or under the messaging
--- lockdown, so a refused ding stashes its level and goes out on a later
--- flush; the latest level wins when two land before the flush.
-function xp.maybeGuildDing(level)
-  if not xp.opts().guildDing then
-    return false
-  end
-  if type(IsInGuild) ~= "function" or not IsInGuild() then
-    return false
-  end
-  local lvl = level
-  if type(lvl) ~= "number" then
-    if type(UnitLevel) ~= "function" then
-      return false
-    end
-    lvl = UnitLevel("player")
-  end
-  if type(lvl) ~= "number" then
-    return false
-  end
-  if ns.combat() or chatLocked() then
-    pendingGuildDing = lvl
-    return false
-  end
-  local ok = sendGuild(("Ding %d"):format(math.floor(lvl)))
-  if ok then
-    pendingGuildDing = nil
-  end
-  return ok
-end
-
--- Flush a refused ding once the fight ends and the client takes chat
--- back. Called from refresh, which already runs every second and on
--- every event including PLAYER_REGEN_ENABLED, so no new timer and no
--- new event. The attempt consumes the pending level either way: a
--- dropped option, a left guild, or a missing API never retries forever,
--- and a fresh refused ding re-stashes on its own event.
-function xp.flushGuildDing()
-  if pendingGuildDing == nil then
-    return false
-  end
-  if ns.combat() or chatLocked() then
-    return false
-  end
-  local lvl = pendingGuildDing
-  pendingGuildDing = nil
-  return xp.maybeGuildDing(lvl)
-end
+-- Level-up guild posts were removed outright: any SendChatMessage from
+-- addon code trips the blocked-action guard, which no pcall can catch,
+-- so the module never sends chat.
 
 -- The XP bar is the single authoritative award source: each update
 -- reconstructs at most one gain from the snapshot delta and stamps it
@@ -668,7 +587,6 @@ function xp.refresh()
   local now = xp.now()
   -- Bursts report here: deferred through combat, netted after 0.15s of quiet.
   flushSummary(now)
-  xp.flushGuildDing()
   if mode == "dormant" then
     xp.barShown(false)
     applyNativeBar()
@@ -728,7 +646,6 @@ local function enterXPMode()
   repBaseline = nil
   setEvents(repEvents, false)
   setEvents(xpEvents, true)
-  frame:RegisterEvent("PLAYER_LEVEL_UP")
   frame:RegisterEvent("UNIT_AURA")
   ensureTicker()
 end
@@ -737,7 +654,6 @@ local function enterRepMode()
   mode = "rep"
   setEvents(xpEvents, false)
   setEvents(repEvents, true)
-  frame:RegisterEvent("PLAYER_LEVEL_UP")
   frame:RegisterEvent("UNIT_AURA")
   ensureTicker()
   repCache = {}
@@ -764,13 +680,6 @@ local function enterDormant()
   setEvents(xpEvents, false)
   setEvents(repEvents, false)
   frame:UnregisterEvent("UNIT_AURA")
-  -- The ding belongs to the module, not the mode: a dormant mode keeps
-  -- PLAYER_LEVEL_UP registered while the module runs, so a level-up that caps
-  -- the character still posts. Only a disabled module drops the event (and its deferred ding with it).
-  if not xp.opts().enabled then
-    frame:UnregisterEvent("PLAYER_LEVEL_UP")
-    pendingGuildDing = nil
-  end
   applyNativeBar()
 end
 
@@ -918,8 +827,6 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2)
       end
     elseif event == "PLAYER_XP_UPDATE" then
       onXP()
-    elseif event == "PLAYER_LEVEL_UP" then
-      xp.maybeGuildDing(arg1)
     elseif event == "UPDATE_FACTION" then
       onRep()
     elseif event == "MAJOR_FACTION_RENOWN_LEVEL_CHANGED" then
@@ -935,9 +842,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2)
     then
       xp.scanQuestXp()
     end
-    -- PLAYER_LEVEL_UP only announces: the XP path
-    -- is the single authoritative award source, so a ding never awards
-    -- here and event order cannot double-count it.
+    -- The XP path is the single authoritative award source.
     -- PLAYER_EQUIPMENT_CHANGED, UPDATE_EXHAUSTION, and
     -- PLAYER_UPDATE_RESTING fall through the same way: a rest change
     -- only re-renders, which refreshes the rested and quest lines at
@@ -955,7 +860,6 @@ function xp.InitImpl()
   xp.CheckAnchor()
   frame:RegisterEvent("PLAYER_ENTERING_WORLD")
   frame:RegisterEvent("PLAYER_MAX_LEVEL_UPDATE")
-  frame:RegisterEvent("PLAYER_LEVEL_UP")
   xp.ApplyEnabledImpl()
 end
 
@@ -963,7 +867,6 @@ function xp.ApplyEnabledImpl()
   if xp.opts().enabled then
     frame:RegisterEvent("PLAYER_ENTERING_WORLD")
     frame:RegisterEvent("PLAYER_MAX_LEVEL_UPDATE")
-    frame:RegisterEvent("PLAYER_LEVEL_UP")
     xp.activateMode(xp.readSnapshot())
     xp.refresh()
   else
