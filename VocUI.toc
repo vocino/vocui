@@ -26,6 +26,10 @@ core/Modules.lua
 core/Settings.lua
 core/Slash.lua
 core/Main.lua
+modules/chat/Chat.lua
+modules/chat/Dialect.lua
+modules/chat/Dictionaries.lua
+modules/chat/Panel.lua
 modules/bars/Bars.lua
 modules/bars/Consumables.lua
 modules/bars/Grow.lua

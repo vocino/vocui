@@ -120,6 +120,9 @@ harness). Modules so far:
   right-click refreshes the bars macros, and its own page carries the
   position slider plus Refresh and Survey buttons with
   `/vui map` subcommands.
+- **Chat** (`modules/chat/`): rewrites outgoing chat in a dwarven or
+  troll dialect before it sends, with its own page under Settings >
+  AddOns > VocUI and `/vui chat` subcommands.
 
 From here the package grows the way it was designed to: a module at
 a time, added while playing, each

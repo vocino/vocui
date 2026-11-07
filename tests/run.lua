@@ -3604,7 +3604,8 @@ do
     type(ns.db.modules) == "table" and ns.db.modules.map.enabled == true and ns.db.modules.map.angle == 225
   )
   local button = map.button
-  check("map builds one button", button ~= nil and button.width == 33 and button.height == 33)
+  check("map builds one button", button ~= nil and button.width == 31 and button.height == 31)
+  check("map layers ring, disk, and icon", map.border ~= nil and map.background ~= nil and map.icon ~= nil)
   local points = button.points
   check(
     "map hangs the button on the minimap ring",
@@ -3632,7 +3633,7 @@ do
   check("angle 225 sits bottom-left", near(x, -70.71) and near(y, -70.71))
 end
 
--- Map: clicks run the regular actions through the core
+-- Map: left-click pops the actions out, right-click opens settings
 do
   mapWorld()
   local ns = loadMap()
@@ -3646,6 +3647,7 @@ do
     end,
   })
   ns.modules.InitAll()
+  local map = ns.map
   local opened, played = 0, {}
   ns.settings.Open = function()
     opened = opened + 1
@@ -3653,11 +3655,42 @@ do
   ns.play = function(kind)
     played[#played + 1] = kind
   end
-  local onClick = ns.map.button.scripts.OnClick
-  onClick(ns.map.button, "LeftButton")
-  check("left-click opens settings", opened == 1 and played[1] == "open")
-  onClick(ns.map.button, "RightButton")
-  check("right-click refreshes macros through slash", played[2] == "on" and pressed[1] == "refresh")
+  check("actions start put away", map.window ~= nil and map.window.shown == false)
+  local onClick = map.button.scripts.OnClick
+  onClick(map.button, "LeftButton")
+  check("left-click pops the actions out", map.window.shown == true and played[1] == "open")
+  local names, press = {}, {}
+  for _, a in ipairs(map.actions) do
+    names[#names + 1] = a.key
+    press[a.key] = a.press
+  end
+  check("pop-out lists the regular actions", table.concat(names, ",") == "refresh,survey,settings")
+  press.refresh()
+  check(
+    "refresh runs through slash and puts the window away",
+    played[2] == "on" and pressed[1] == "refresh" and map.window.shown == false
+  )
+  onClick(map.button, "LeftButton")
+  press.survey()
+  check(
+    "survey runs through slash and puts the window away",
+    played[4] == "open" and pressed[2] == "survey" and map.window.shown == false
+  )
+  onClick(map.button, "LeftButton")
+  press.settings()
+  check(
+    "settings opens the tree and puts the window away",
+    opened == 1 and played[6] == "open" and map.window.shown == false
+  )
+  onClick(map.button, "LeftButton")
+  onClick(map.button, "LeftButton")
+  check("left-click toggles the window", map.window.shown == false and played[7] == "open" and played[8] == "close")
+  onClick(map.button, "LeftButton")
+  onClick(map.button, "RightButton")
+  check(
+    "right-click opens settings and puts the window away",
+    opened == 2 and played[10] == "open" and map.window.shown == false
+  )
   mapTeardown()
 end
 
@@ -3677,7 +3710,7 @@ do
     "map tooltip title is gold",
     w.tooltip.title == "VocUI" and w.tooltip.color[1] == 1 and w.tooltip.color[2] == 0.82 and w.tooltip.color[3] == 0
   )
-  check("map tooltip teaches the clicks", #w.tooltip.lines == 2 and w.tooltip.lines[2]:find("refresh", 1, true) ~= nil)
+  check("map tooltip teaches the clicks", #w.tooltip.lines == 2 and w.tooltip.lines[2]:find("settings", 1, true) ~= nil)
   map.button.scripts.OnLeave()
   check("map leave hides the tooltip", w.tooltip.shown == false)
   mapTeardown()
@@ -3818,7 +3851,8 @@ do
   check("panel leads with the job", headers[1] == map.descriptor.job)
   check(
     "panel teaches the clicks and groups the actions",
-    headers[2] == "Left-click opens these settings, right-click refreshes the macros" and headers[3] == "Quick actions"
+    headers[2] == "Left-click opens the quick actions, right-click opens these settings"
+      and headers[3] == "Quick actions"
   )
   check("panel carries both action buttons", #buttons == 2)
   local slider
@@ -3857,6 +3891,381 @@ do
   _G.Settings, _G.SettingsPanel, _G.CreateSettingsListSectionHeaderInitializer, _G.CreateSettingsButtonInitializer =
     nil, nil, nil, nil
   mapTeardown()
+end
+
+-- Chat module: the outgoing dialect filter on the documented send call.
+local CHAT = {
+  "modules/chat/Chat.lua",
+  "modules/chat/Dialect.lua",
+  "modules/chat/Dictionaries.lua",
+  "modules/chat/Panel.lua",
+}
+local function loadChat()
+  local ns = loadCore()
+  for _, file in ipairs(CHAT) do
+    assert(loadfile(file))("VocUI", ns)
+  end
+  return ns
+end
+
+-- Deterministic randomness for dialect tests: variant picks take the
+-- first variant, chance rolls return the controllable roll. Scoped to
+-- the module table under test, so the shared generator is never touched.
+local testRoll = 1
+local function stubRandom(chat)
+  testRoll = 1
+  chat.random = function(n)
+    if n == 100 then
+      return testRoll
+    end
+    return 1
+  end
+end
+
+-- Chat: descriptor, state location, options, help grammar
+do
+  _G.C_ChatInfo = { SendChatMessage = function() end }
+  local ns = loadChat()
+  ns.db = {}
+  local chat = ns.chat
+  check(
+    "chat descriptor registered",
+    ns.modules.GetAll()[1] == chat.descriptor and chat.descriptor.name == "chat" and chat.descriptor.default == true
+  )
+  ns.modules.InitAll()
+  check(
+    "chat state lives under modules.chat",
+    type(ns.db.modules) == "table" and ns.db.modules.chat.enabled == true and ns.db.chat == nil
+  )
+  check(
+    "chat defaults speak dwarven at chance 8",
+    ns.db.modules.chat.dialect == "dwarf" and ns.db.modules.chat.chance == 8
+  )
+  local keys = {}
+  for _, row in ipairs(chat.OPTIONS) do
+    if type(row.key) == "string" then
+      keys[#keys + 1] = row.key
+    end
+  end
+  check(
+    "chat options present in panel order",
+    table.concat(keys, ",") == "enabled,dialect,chance,say,yell,whisper,channel,party,guild,raid"
+  )
+  check(
+    "chat help lines keep config second to last",
+    ns.HELP[#ns.HELP - 1]:find("config", 1, true) ~= nil and ns.HELP[2]:find("/vui chat", 1, true) ~= nil
+  )
+  _G.C_ChatInfo = nil
+  check("unavailable chat stays hidden", chat.IsAvailable() == false)
+end
+
+-- Chat engine: dwarven word rewrites at full chance
+do
+  local ns = loadChat()
+  local chat = ns.chat
+  stubRandom(chat)
+  local dwarf = chat.DICTIONARIES.dwarf
+  check("dwarf says gday", chat.Mangle("well hello there friend", dwarf, 10) == "well G'day ther' friend")
+  check("dwarf phrases need surrounding spaces", chat.Mangle("here I am today", dwarf, 10) == "'ere I'mma today")
+  check("all caps stays untouched", chat.Mangle("HELLO FRIEND", dwarf, 10) == "HELLO FRIEND")
+  check("punctuation rides along", chat.Mangle("hello, friend!", dwarf, 10) == "G'day, friend!")
+  check("double apostrophes collapse", chat.Mangle("a''b", dwarf, 10) == "a'b")
+  local troll = chat.DICTIONARIES.troll
+  check("troll greets", chat.Mangle("hello yes man", troll, 10) == "'ello yah, mon mon")
+end
+
+-- Chat engine: flavor markers thin out below chance 10
+do
+  local ns = loadChat()
+  local chat = ns.chat
+  stubRandom(chat)
+  local dwarf = chat.DICTIONARIES.dwarf
+  testRoll = 90
+  check("flavor sits out a bad roll", chat.Mangle("hello there", dwarf, 8) == "G'day there")
+  check("plain words ignore the roll", chat.Mangle("hello boy", dwarf, 8) == "G'day lad")
+  testRoll = 80
+  check("the boundary roll still applies", chat.Mangle("hello there", dwarf, 8) == "G'day ther'")
+end
+
+-- Chat engine: hyperlinks shelter and come back byte-identical
+do
+  local ns = loadChat()
+  local chat = ns.chat
+  stubRandom(chat)
+  local dwarf, troll = chat.DICTIONARIES.dwarf, chat.DICTIONARIES.troll
+  check(
+    "one link survives",
+    chat.Mangle("hello |cffffff00|Hitem:12345|h[Thunderfury]|h|r friend", dwarf, 10)
+      == "G'day |cffffff00|Hitem:12345|h[Thunderfury]|h|r friend"
+  )
+  -- The apostrophe guard skips ^-anchored rules after an', so that
+  -- reads through the loose th rule, like the original.
+  check(
+    "two links survive with mangling between",
+    chat.Mangle("say this |c1|h[A]|h|r and that |c2|h[B]|h|r now", troll, 10)
+      == "say dis |c1|h[A]|h|r an' t'at |c2|h[B]|h|r now"
+  )
+end
+
+-- Chat gate: toggles, types, channels, and the (( hatch
+do
+  local ns = loadChat()
+  ns.db = {}
+  local chat = ns.chat
+  stubRandom(chat)
+  check("say mangles", chat.MangleForSend("hello", "SAY") == "G'day")
+  check("lowercase types mangle", chat.MangleForSend("hello", "say") == "G'day")
+  check("ooc stays as typed", chat.MangleForSend("(( hello", "SAY") == "(( hello")
+  check("emote never changes", chat.MangleForSend("hello", "EMOTE") == "hello")
+  check("unknown types pass through", chat.MangleForSend("hello", "RAID_WARNING") == "hello")
+  check(
+    "numbered channels gate on 1-4",
+    chat.MangleForSend("hello", "CHANNEL", 2) == "G'day"
+      and chat.MangleForSend("hello", "CHANNEL", 5) == "hello"
+      and chat.MangleForSend("hello", "CHANNEL", nil) == "hello"
+  )
+  local o = chat.opts()
+  o.whisper = false
+  check("a flipped channel passes through", chat.MangleForSend("hello", "WHISPER") == "hello")
+  o.whisper = true
+  o.chance = 0
+  check("chance 0 stays silent", chat.MangleForSend("hello", "SAY") == "hello")
+  o.chance = 8
+  o.enabled = false
+  check("a disabled module passes through", chat.MangleForSend("hello", "SAY") == "hello")
+  o.enabled = true
+  o.dialect = "troll"
+  check("troll speaks", chat.MangleForSend("hello", "SAY") == "'ello")
+  o.dialect = "orc"
+  check("unknown dialects stay silent", chat.MangleForSend("hello", "SAY") == "hello")
+  o.dialect = "dwarf"
+  check("nil sends empty", chat.MangleForSend(nil, "SAY") == "")
+  check("junk input crosses untouched", chat.MangleForSend(42, "SAY") == 42)
+end
+
+-- Chat hook: the wrapper mangles in place and restores on disable
+do
+  local sent = {}
+  local original = function(message, chatType, languageID, target)
+    sent = { message = message, chatType = chatType, languageID = languageID, target = target }
+  end
+  _G.C_ChatInfo = { SendChatMessage = original }
+  local ns = loadChat()
+  ns.db = {}
+  local chat = ns.chat
+  stubRandom(chat)
+  ns.say = function() end
+  ns.play = function() end
+  ns.modules.InitAll()
+  check("send wrapper installed", _G.C_ChatInfo.SendChatMessage == chat.SendChatMessage)
+  _G.C_ChatInfo.SendChatMessage("hello", "SAY", 1, nil)
+  check(
+    "wrapper mangles and passes args through",
+    sent.message == "G'day" and sent.chatType == "SAY" and sent.languageID == 1 and sent.target == nil
+  )
+  local brokenGate = chat.MangleForSend
+  chat.MangleForSend = function()
+    error("boom")
+  end
+  _G.C_ChatInfo.SendChatMessage("hello", "SAY")
+  check("a mangling error fails open", sent.message == "hello")
+  chat.MangleForSend = brokenGate
+  chat.SetEnabled(false)
+  check("disable restores the saved call", _G.C_ChatInfo.SendChatMessage == original)
+  chat.SetEnabled(true)
+  check("re-enable rewraps", _G.C_ChatInfo.SendChatMessage == chat.SendChatMessage)
+  _G.C_ChatInfo = nil
+  check("hook declines without the api", chat.HookSend() == false)
+  check("disable without the api stays silent", pcall(chat.ApplyEnabledImpl) == true)
+end
+
+-- Chat slash: dialect, chance, and channel subcommands
+do
+  _G.C_ChatInfo = {
+    SendChatMessage = function() end,
+  }
+  local ns = loadChat()
+  ns.db = {}
+  local chat = ns.chat
+  stubRandom(chat)
+  local said, played = {}, {}
+  ns.say = function(msg)
+    said[#said + 1] = msg
+  end
+  ns.play = function(kind)
+    played[#played + 1] = kind
+  end
+  ns.modules.InitAll()
+  _G.SlashCmdList.VOCUI("chat troll")
+  check(
+    "slash sets the dialect with sound",
+    chat.opts().dialect == "troll" and played[#played] == "on" and said[#said] == "chat dialect troll"
+  )
+  _G.SlashCmdList.VOCUI("chat chance 3")
+  check(
+    "slash sets the chance with sound",
+    chat.opts().chance == 3 and played[#played] == "on" and said[#said] == "chat chance 3"
+  )
+  local before = chat.opts().chance
+  local saidBefore = #said
+  local printed = capturePrint(function()
+    _G.SlashCmdList.VOCUI("chat chance 11")
+  end)
+  check(
+    "out-of-range chance only prints help",
+    chat.opts().chance == before and #printed == #ns.HELP and #said == saidBefore + 1
+  )
+  _G.SlashCmdList.VOCUI("chat toggle say")
+  check(
+    "slash flips a channel with sound",
+    chat.opts().say == false and played[#played] == "off" and said[#said] == "chat say channel off"
+  )
+  _G.SlashCmdList.VOCUI("chat toggle general")
+  check("general names the channel key", chat.opts().channel == false)
+  _G.SlashCmdList.VOCUI("chat toggle list")
+  check("toggle list names every channel", said[#said]:find("channels say off", 1, true) ~= nil)
+  before = chat.opts().say
+  saidBefore = #said
+  printed = capturePrint(function()
+    _G.SlashCmdList.VOCUI("chat toggle bogus")
+  end)
+  check(
+    "unknown channels only print help",
+    chat.opts().say == before and #printed == #ns.HELP and #said == saidBefore + 1
+  )
+  _G.SlashCmdList.VOCUI("chat")
+  check(
+    "bare slash toggles the module",
+    chat.opts().enabled == false and played[#played] == "off" and _G.C_ChatInfo.SendChatMessage ~= chat.SendChatMessage
+  )
+  _G.SlashCmdList.VOCUI("chat on")
+  check("slash turns the module on", chat.opts().enabled == true and played[#played] == "on")
+  saidBefore = #said
+  printed = capturePrint(function()
+    _G.SlashCmdList.VOCUI("chat bogus")
+  end)
+  check(
+    "unknown chat subcommands only print help",
+    chat.opts().enabled == true and #printed == #ns.HELP and #said == saidBefore + 1
+  )
+  _G.C_ChatInfo = nil
+end
+
+-- Chat panel: subcategory under VocUI, dialect and channel rows, live toggle
+do
+  _G.C_ChatInfo = {
+    SendChatMessage = function() end,
+  }
+  local registered, subcats, headers = {}, {}, {}
+  local dropdownInit
+  _G.Settings = {
+    RegisterVerticalLayoutCategory = function(n)
+      return {
+        name = n,
+        GetID = function()
+          return 7
+        end,
+      }
+    end,
+    RegisterVerticalLayoutSubcategory = function(parent, n)
+      local sub = { name = n, parent = parent }
+      subcats[#subcats + 1] = sub
+      return sub
+    end,
+    RegisterAddOnCategory = function() end,
+    OpenToCategory = function() end,
+    RegisterAddOnSetting = function(page, variable, key, tbl, vtype, label, default)
+      local s = { page = page, variable = variable, key = key }
+      s.SetValueChangedCallback = function(_, fn)
+        s.callback = fn
+      end
+      registered[#registered + 1] = s
+      return s
+    end,
+    CreateCheckbox = function(_, s)
+      return { setting = s }
+    end,
+    CreateSlider = function(_, s, options)
+      return { setting = s, options = options }
+    end,
+    CreateSliderOptions = function(minValue, maxValue, step)
+      return { minValue = minValue, maxValue = maxValue, step = step }
+    end,
+    CreateDropdown = function(_, s, options)
+      dropdownInit = { setting = s, options = options }
+      return dropdownInit
+    end,
+    CreateControlTextContainer = function()
+      local data = {}
+      return {
+        Add = function(_, v, label)
+          data[#data + 1] = { value = v, label = label }
+        end,
+        GetData = function()
+          return data
+        end,
+      }
+    end,
+  }
+  _G.SettingsPanel = {
+    GetLayout = function()
+      return {
+        AddInitializer = function(_, init)
+          headers[#headers + 1] = init
+        end,
+      }
+    end,
+  }
+  _G.CreateSettingsListSectionHeaderInitializer = function(text)
+    return text
+  end
+  local ns = loadChat()
+  ns.db = {}
+  ns.modules.InitAll()
+  ns.settings.Init()
+  local chat = ns.chat
+  check("chat page is a subcategory under VocUI", #subcats == 1 and subcats[1].name == "Chat")
+  local keys = {}
+  for _, s in ipairs(registered) do
+    keys[#keys + 1] = s.key
+  end
+  check(
+    "panel registers the rows in order",
+    table.concat(keys, ",") == "enabled,dialect,chance,say,yell,whisper,channel,party,guild,raid"
+  )
+  check(
+    "panel leads with the job and the escape hatch",
+    headers[1] == chat.descriptor.job
+      and headers[2] == "Lines starting with (( stay untouched, emotes never change"
+      and headers[3] == "Dialect"
+      and headers[4] == "Channels"
+  )
+  local dropdown
+  for _, s in ipairs(registered) do
+    if s.key == "dialect" then
+      dropdown = s
+    end
+  end
+  check("dialect row exists", dropdown ~= nil)
+  local picked = dropdownInit ~= nil and dropdownInit.options() or {}
+  check(
+    "dialect dropdown offers dwarven and troll",
+    #picked == 2 and picked[1].value == "dwarf" and picked[2].value == "troll"
+  )
+  local enabledSetting
+  for _, s in ipairs(registered) do
+    if s.key == "enabled" then
+      enabledSetting = s
+    end
+  end
+  ns.db.modules.chat.enabled = false
+  enabledSetting.callback()
+  check("panel toggle removes the wrapper", _G.C_ChatInfo.SendChatMessage ~= chat.SendChatMessage)
+  ns.db.modules.chat.enabled = true
+  enabledSetting.callback()
+  check("panel toggle reinstalls the wrapper", _G.C_ChatInfo.SendChatMessage == chat.SendChatMessage)
+  _G.Settings, _G.SettingsPanel, _G.CreateSettingsListSectionHeaderInitializer = nil, nil, nil
+  _G.C_ChatInfo = nil
 end
 
 print(string.format("%d passed, %d failed", pass, fail))
