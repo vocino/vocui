@@ -100,6 +100,18 @@ function gear.Cosmetic(link)
   return false
 end
 
+-- A worn fishing pole is never displaced: swapping a real weapon over
+-- the rod mid-trip breaks fishing, and no item level justifies it.
+-- The candidate side already refuses poles (Cosmetic above); this is
+-- the worn side, read from the same subclass.
+function gear.IsFishingRod(link)
+  if not link then
+    return false
+  end
+  local _, _, _, _, _, classID, subclassID = C_Item.GetItemInfoInstant(link)
+  return classID == 2 and subclassID == gear.FISHING_SUBCLASS
+end
+
 -- Profession tools are never an upgrade: a skinning knife must never
 -- win a weapon slot, whatever its item level. Modern profession
 -- equipment (Enum.ItemClass.Profession = 19) is not a weapon at all;
@@ -374,6 +386,16 @@ function gear.AnnounceHeirloom(link, held)
   if o.announce and not gear.flagged[link] then
     gear.flagged[link] = true
     ns.say("keeping heirloom " .. held .. " (" .. link .. " is an upgrade)")
+  end
+end
+
+-- A worn rod is announced the heirloom way: once per look per link,
+-- silent when announcements are off.
+function gear.AnnounceFishingRod(link, held)
+  local o = gear.opts()
+  if o.announce and not gear.flagged[link] then
+    gear.flagged[link] = true
+    ns.say("keeping fishing pole " .. held .. " (" .. link .. " is an upgrade)")
   end
 end
 

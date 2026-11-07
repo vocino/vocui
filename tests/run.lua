@@ -1041,6 +1041,29 @@ do
   )
 end
 
+-- Gear never replaces an equipped fishing pole: the rod stays no
+-- matter what the bags hold, and the scan says so once per look.
+do
+  local w = gearWorld()
+  local ns = loadGear()
+  ns.db = {}
+  ns.modules.InitAll()
+  local gear, said = ns.gear, {}
+  ns.say = function(msg)
+    said[#said + 1] = msg
+  end
+  addItem(w, "rod", { equipLoc = "INVTYPE_2HWEAPON", ilvl = 10, classID = 2, subclassID = 20 })
+  addItem(w, "sword", { equipLoc = "INVTYPE_2HWEAPON", ilvl = 30, classID = 2, subclassID = 7 })
+  w.equipped[16] = "rod"
+  w.bags[0] = { "sword" }
+  gear.Scan()
+  check("an equipped fishing pole is never replaced", #w.equips == 0)
+  check("the scan says it is keeping the pole", #said == 1 and said[1]:find("fishing pole", 1, true) ~= nil)
+  local announced = #said
+  gear.CheckNowImpl()
+  check("a manual look re-announces and still never equips", #said == announced + 1 and #w.equips == 0)
+end
+
 -- Gear as a Baganator upgrade plugin: our verdicts badge the bags.
 do
   local w = gearWorld()

@@ -369,7 +369,9 @@ function gear.ScanSingle(link, ev, o, setCtx, readyThreshold, readySet)
   local breakThreshold, breakSet = gear.SetBreaks(setCtx, link, held)
   local completes = gear.SetSwapCompletes(held, readyThreshold, readySet)
   local handSwap = gear.HandCrosses(link, held)
-  if o.keepHeirlooms and gear.IsHeirloom(held) then
+  if gear.IsFishingRod(held) then
+    gear.AnnounceFishingRod(link, held)
+  elseif o.keepHeirlooms and gear.IsHeirloom(held) then
     gear.AnnounceHeirloom(link, held)
   elseif gear.WeaponKindCrosses(link, held) then
     gear.AnnounceWeaponKind(link, ev)
