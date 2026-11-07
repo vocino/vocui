@@ -115,6 +115,11 @@ harness). Modules so far:
   sells junk, asks about surplus consumables, and repairs;
   no gear selling, no disenchanting, no button. Its own page under Settings > AddOns >
   VocUI and `/vui vendor` subcommands.
+- **Map** (`modules/map/`): one blue button on the minimap for the
+  regular actions: left-click opens Settings > AddOns > VocUI,
+  right-click refreshes the bars macros, and its own page carries the
+  position slider plus Refresh and Survey buttons with
+  `/vui map` subcommands.
 
 From here the package grows the way it was designed to: a module at
 a time, added while playing, each

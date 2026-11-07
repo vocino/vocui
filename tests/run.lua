@@ -3546,5 +3546,318 @@ do
   consumableTeardown()
 end
 
+-- Map module: one blue button on the minimap for the regular actions.
+local MAP = {
+  "modules/map/Map.lua",
+  "modules/map/Panel.lua",
+}
+local function loadMap()
+  local ns = loadCore()
+  for _, file in ipairs(MAP) do
+    assert(loadfile(file))("VocUI", ns)
+  end
+  return ns
+end
+
+-- A stub minimap world: an anchor frame and the tooltip recorder.
+local function mapWorld()
+  local w = { tooltip = { lines = {} } }
+  _G.Minimap = {}
+  _G.UIParent = {}
+  _G.GameTooltip = {
+    SetOwner = function(_, owner, anchor)
+      w.tooltip.owner, w.tooltip.anchor = owner, anchor
+    end,
+    SetText = function(_, t, r, g, b)
+      w.tooltip.title = t
+      w.tooltip.color = { r, g, b }
+    end,
+    AddLine = function(_, t)
+      w.tooltip.lines[#w.tooltip.lines + 1] = t
+    end,
+    Show = function()
+      w.tooltip.shown = true
+    end,
+    Hide = function()
+      w.tooltip.shown = false
+    end,
+  }
+  return w
+end
+local function mapTeardown()
+  _G.Minimap, _G.UIParent, _G.GameTooltip = nil, nil, nil
+end
+
+-- Map: descriptor, state location, the button on the ring
+do
+  mapWorld()
+  local ns = loadMap()
+  ns.db = {}
+  ns.modules.InitAll()
+  local map = ns.map
+  check(
+    "map descriptor registered",
+    ns.modules.GetAll()[1] == map.descriptor and map.descriptor.name == "map" and map.descriptor.default == true
+  )
+  check(
+    "map state lives under modules.map",
+    type(ns.db.modules) == "table" and ns.db.modules.map.enabled == true and ns.db.modules.map.angle == 225
+  )
+  local button = map.button
+  check("map builds one button", button ~= nil and button.width == 33 and button.height == 33)
+  local points = button.points
+  check(
+    "map hangs the button on the minimap ring",
+    points ~= nil and points[1] == "CENTER" and points[2] == _G.Minimap and points[3] == "CENTER"
+  )
+  local wantX, wantY = map.OffsetForAngle(225, map.RADIUS)
+  check(
+    "default angle sits bottom-left",
+    points ~= nil and math.abs(points[4] - wantX) < 0.01 and math.abs(points[5] - wantY) < 0.01
+  )
+  mapTeardown()
+end
+
+-- Map: the ring math every anchor shares
+do
+  local ns = loadMap()
+  local function near(a, b)
+    return math.abs(a - b) < 0.01
+  end
+  local x, y = ns.map.OffsetForAngle(0, 100)
+  check("angle 0 faces right", near(x, 100) and near(y, 0))
+  x, y = ns.map.OffsetForAngle(90, 100)
+  check("angle 90 faces up", near(x, 0) and near(y, 100))
+  x, y = ns.map.OffsetForAngle(225, 100)
+  check("angle 225 sits bottom-left", near(x, -70.71) and near(y, -70.71))
+end
+
+-- Map: clicks run the regular actions through the core
+do
+  mapWorld()
+  local ns = loadMap()
+  ns.db = {}
+  local pressed = {}
+  ns.modules.Register({
+    name = "bars",
+    init = function() end,
+    Slash = function(rest)
+      pressed[#pressed + 1] = rest
+    end,
+  })
+  ns.modules.InitAll()
+  local opened, played = 0, {}
+  ns.settings.Open = function()
+    opened = opened + 1
+  end
+  ns.play = function(kind)
+    played[#played + 1] = kind
+  end
+  local onClick = ns.map.button.scripts.OnClick
+  onClick(ns.map.button, "LeftButton")
+  check("left-click opens settings", opened == 1 and played[1] == "open")
+  onClick(ns.map.button, "RightButton")
+  check("right-click refreshes macros through slash", played[2] == "on" and pressed[1] == "refresh")
+  mapTeardown()
+end
+
+-- Map: hover follows the tooltip contract
+do
+  local w = mapWorld()
+  local ns = loadMap()
+  ns.db = {}
+  ns.modules.InitAll()
+  local map = ns.map
+  map.button.scripts.OnEnter(map.button)
+  check(
+    "map tooltip anchors to the button",
+    w.tooltip.owner == map.button and w.tooltip.anchor == "ANCHOR_LEFT" and w.tooltip.shown == true
+  )
+  check(
+    "map tooltip title is gold",
+    w.tooltip.title == "VocUI" and w.tooltip.color[1] == 1 and w.tooltip.color[2] == 0.82 and w.tooltip.color[3] == 0
+  )
+  check("map tooltip teaches the clicks", #w.tooltip.lines == 2 and w.tooltip.lines[2]:find("refresh", 1, true) ~= nil)
+  map.button.scripts.OnLeave()
+  check("map leave hides the tooltip", w.tooltip.shown == false)
+  mapTeardown()
+end
+
+-- Map: slash and toggle
+do
+  mapWorld()
+  local ns = loadMap()
+  ns.db = {}
+  local pressed = {}
+  ns.modules.Register({
+    name = "bars",
+    init = function() end,
+    Slash = function(rest)
+      pressed[#pressed + 1] = rest
+    end,
+  })
+  ns.modules.InitAll()
+  local map = ns.map
+  map.Slash("off")
+  check("map off hides the button", map.opts().enabled == false and map.button.shown == false)
+  map.Slash("on")
+  check("map on shows the button", map.opts().enabled == true and map.button.shown == true)
+  map.Slash("refresh")
+  map.Slash("survey")
+  check("map slash forwards its presses", pressed[1] == "refresh" and pressed[2] == "survey")
+  capturePrint(function()
+    map.Slash("bogus")
+  end)
+  check("unknown map subcommand only prints help", #pressed == 2)
+  mapTeardown()
+end
+
+-- Map: without a minimap the button hangs off the screen corner
+do
+  mapWorld()
+  _G.Minimap = nil
+  local ns = loadMap()
+  ns.db = {}
+  ns.modules.InitAll()
+  local points = ns.map.button.points
+  check("no minimap means the screen corner", points ~= nil and points[1] == "TOPRIGHT" and points[2] == _G.UIParent)
+  mapTeardown()
+end
+
+-- Map: validity needs frames
+do
+  mapWorld()
+  local ns = loadMap()
+  local realCreateFrame = _G.CreateFrame
+  _G.CreateFrame = nil
+  check("no frames means unavailable", ns.map.IsAvailable() == false)
+  _G.CreateFrame = realCreateFrame
+  check("frames mean available", ns.map.IsAvailable() == true)
+  mapTeardown()
+end
+
+-- Map panel: a subcategory under VocUI, toggle plus angle plus actions
+do
+  mapWorld()
+  local registered, subcats, headers, created, buttons = {}, {}, {}, {}, {}
+  _G.Settings = {
+    RegisterVerticalLayoutCategory = function(n)
+      return {
+        name = n,
+        GetID = function()
+          return 7
+        end,
+      }
+    end,
+    RegisterVerticalLayoutSubcategory = function(parent, n)
+      local sub = { name = n, parent = parent }
+      subcats[#subcats + 1] = sub
+      return sub
+    end,
+    RegisterAddOnCategory = function() end,
+    OpenToCategory = function() end,
+    RegisterAddOnSetting = function(page, variable, key, tbl, vtype, label, default)
+      local s = { page = page, key = key, vtype = vtype }
+      s.SetValueChangedCallback = function(_, fn)
+        s.callback = fn
+      end
+      registered[#registered + 1] = s
+      return s
+    end,
+    CreateCheckbox = function(_, s, tooltip)
+      created[#created + 1] = { kind = "checkbox", setting = s, tooltip = tooltip }
+      return {}
+    end,
+    CreateSliderOptions = function(minValue, maxValue, step)
+      return { minValue = minValue, maxValue = maxValue, step = step }
+    end,
+    CreateSlider = function(_, s, options, tooltip)
+      created[#created + 1] = { kind = "slider", setting = s, options = options, tooltip = tooltip }
+      return {}
+    end,
+  }
+  _G.SettingsPanel = {
+    GetLayout = function()
+      return {
+        AddInitializer = function(_, init)
+          headers[#headers + 1] = init
+        end,
+      }
+    end,
+  }
+  _G.CreateSettingsListSectionHeaderInitializer = function(text)
+    return text
+  end
+  _G.CreateSettingsButtonInitializer = function(name, buttonText, onClick, tooltip, addSearchTags)
+    local init = { name = name, buttonText = buttonText, tooltip = tooltip, addSearchTags = addSearchTags }
+    function init.SetParentInitializer(_, parent, gate)
+      init.parent, init.gate = parent, gate
+    end
+    buttons[#buttons + 1] = { init = init, click = onClick }
+    return init
+  end
+  local ns = loadMap()
+  ns.db = {}
+  local pressed = {}
+  ns.modules.Register({
+    name = "bars",
+    init = function() end,
+    Slash = function(rest)
+      pressed[#pressed + 1] = rest
+    end,
+  })
+  ns.modules.InitAll()
+  ns.settings.Init()
+  local map = ns.map
+  check("map page is a subcategory under VocUI", #subcats == 1 and subcats[1].name == "Map")
+  local keys = {}
+  for _, s in ipairs(registered) do
+    keys[#keys + 1] = s.key
+  end
+  check("panel registers the toggle and the angle", table.concat(keys, ",") == "enabled,angle")
+  check("panel leads with the job", headers[1] == map.descriptor.job)
+  check(
+    "panel teaches the clicks and groups the actions",
+    headers[2] == "Left-click opens these settings, right-click refreshes the macros" and headers[3] == "Quick actions"
+  )
+  check("panel carries both action buttons", #buttons == 2)
+  local slider
+  for _, c in ipairs(created) do
+    if c.kind == "slider" then
+      slider = c
+    end
+  end
+  check(
+    "angle slider spans the ring",
+    slider ~= nil and slider.options.minValue == 0 and slider.options.maxValue == 360 and slider.options.step == 5
+  )
+  local enabledSetting, angleSetting
+  for _, s in ipairs(registered) do
+    if s.key == "enabled" then
+      enabledSetting = s
+    elseif s.key == "angle" then
+      angleSetting = s
+    end
+  end
+  ns.db.modules.map.enabled = false
+  enabledSetting.callback("enabled")
+  check("panel toggle hides the button", map.button.shown == false)
+  ns.db.modules.map.enabled = true
+  enabledSetting.callback("enabled")
+  buttons[1].click()
+  buttons[2].click()
+  check("action buttons dispatch through slash", pressed[1] == "refresh" and pressed[2] == "survey")
+  ns.db.modules.map.angle = 90
+  angleSetting.callback("angle")
+  local points = map.button.points
+  check(
+    "angle slider re-anchors live",
+    points ~= nil and math.abs(points[4] - 0) < 0.01 and math.abs(points[5] - 100) < 0.01
+  )
+  _G.Settings, _G.SettingsPanel, _G.CreateSettingsListSectionHeaderInitializer, _G.CreateSettingsButtonInitializer =
+    nil, nil, nil, nil
+  mapTeardown()
+end
+
 print(string.format("%d passed, %d failed", pass, fail))
 os.exit(fail > 0 and 1 or 0)

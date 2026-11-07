@@ -36,6 +36,8 @@ modules/gear/Panel.lua
 modules/gear/Scan.lua
 modules/gear/Sheet.lua
 modules/gear/Plugins.lua
+modules/map/Map.lua
+modules/map/Panel.lua
 modules/xp/XP.lua
 modules/xp/Bar.lua
 modules/xp/Bonuses.lua

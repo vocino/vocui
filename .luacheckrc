@@ -36,7 +36,7 @@ read_globals = {
   "GetMaxPlayerLevel", "GetMoney", "GetQuestLogRewardXP", "GetRepairAllCost", "GetTime", "GetXPExhaustion",
   "canaccessvalue", "CanGuildBankRepair", "CanMerchantRepair",
   "InCombatLockdown", "IsInGuild", "IsInInstance", "IsTrialAccount", "IsXPUserDisabled",
-  "MAX_REPUTATION_REACTION", "NUM_BAG_SLOTS",
+  "MAX_REPUTATION_REACTION", "Minimap", "NUM_BAG_SLOTS",
   "PaperDollFrame", "PaperDollFrame_SetItemLevel",
   "PlaySound", "SOUNDKIT",
   "PlayerIsTimerunning", "RepairAllItems",
