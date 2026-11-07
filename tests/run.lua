@@ -3968,7 +3968,7 @@ do
   check("dwarf says gday", chat.Mangle("well hello there friend", dwarf, 10) == "well G'day ther' friend")
   check("dwarf phrases need surrounding spaces", chat.Mangle("here I am today", dwarf, 10) == "'ere I'mma today")
   check("all caps stays untouched", chat.Mangle("HELLO FRIEND", dwarf, 10) == "HELLO FRIEND")
-  check("punctuation rides along", chat.Mangle("hello, friend!", dwarf, 10) == "G'day, friend!")
+  check("punctuation rides along", chat.Mangle("hello, traveler!", dwarf, 10) == "G'day, traveler!")
   check("double apostrophes collapse", chat.Mangle("a''b", dwarf, 10) == "a'b")
   local troll = chat.DICTIONARIES.troll
   check("troll greets", chat.Mangle("hello yes man", troll, 10) == "'ello yah, mon mon")
@@ -3995,8 +3995,8 @@ do
   local dwarf, troll = chat.DICTIONARIES.dwarf, chat.DICTIONARIES.troll
   check(
     "one link survives",
-    chat.Mangle("hello |cffffff00|Hitem:12345|h[Thunderfury]|h|r friend", dwarf, 10)
-      == "G'day |cffffff00|Hitem:12345|h[Thunderfury]|h|r friend"
+    chat.Mangle("hello |cffffff00|Hitem:12345|h[Thunderfury]|h|r today", dwarf, 10)
+      == "G'day |cffffff00|Hitem:12345|h[Thunderfury]|h|r today"
   )
   -- The apostrophe guard skips ^-anchored rules after an', so that
   -- reads through the loose th rule, like the original.
@@ -4266,6 +4266,47 @@ do
   check("panel toggle reinstalls the wrapper", _G.C_ChatInfo.SendChatMessage == chat.SendChatMessage)
   _G.Settings, _G.SettingsPanel, _G.CreateSettingsListSectionHeaderInitializer = nil, nil, nil
   _G.C_ChatInfo = nil
+end
+
+-- Chat engine: rebuilt voice vectors (chance 10, first variant)
+do
+  local ns = loadChat()
+  ns.db = {}
+  local chat = ns.chat
+  stubRandom(chat)
+  local dwarf, troll = chat.DICTIONARIES.dwarf, chat.DICTIONARIES.troll
+  local vectors = {
+    { dwarf, "say hello to my little friend", "say G'day ta me wee lad" },
+    { dwarf, "tell me what do you want", "tell me wha' d'ye want" },
+    { dwarf, "fight for the Alliance today", "fight fer Khaz Modan today" },
+    { dwarf, "those lads are brave", "them lads are brave" },
+    { dwarf, "do you ken me", "do ya ken me" },
+    { dwarf, "we cannot win", "we cannae win" },
+    { dwarf, "she is no girl", "she is nay lass" },
+    { dwarf, "yes I know the way", "aye I ken th' way" },
+    { dwarf, "go to hell now", "go ta blazes now" },
+    { dwarf, "give him the gold", "give 'im th' gold" },
+    { dwarf, "it is never just a little beer", "it is nev'r jes a wee ale" },
+    { dwarf, "before you go tell me no", "afore ya go tell me nay" },
+    { dwarf, "the thane thanked them", "th' thane thanked 'em" },
+    { troll, "tell me are you coming", "tell mi ya be coming" },
+    { troll, "we are going to take the city", "we be gonna take da city" },
+    { troll, "who are you mon", "who ya be mon" },
+    { troll, "what do you want", "wha' do ya want" },
+    { troll, "I thank you very much", "I tank ya, mon real much" },
+    { troll, "my brother is very brave", "mi brudda be real brave" },
+    { troll, "this power is dark", "dis mojo be black" },
+    { troll, "the doctor is in", "da doctor be in" },
+    { troll, "those men", "dose men" },
+    { troll, "thanks", "tank ya" },
+    { troll, "thank the loa", "tank da loa" },
+    { troll, "do you feel lucky", "do ya be feelin' lucky" },
+    { troll, "sure thing thanks bye", "ya mon t'ing tank ya later, mon" },
+    { troll, "your gear is ready", "ya gear be ready" },
+  }
+  for _, v in ipairs(vectors) do
+    check("voice: " .. v[2], chat.Mangle(v[2], v[1], 10) == v[3])
+  end
 end
 
 print(string.format("%d passed, %d failed", pass, fail))
